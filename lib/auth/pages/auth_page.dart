@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../auth_provider.dart';
+import 'package:provider/provider.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -95,7 +97,7 @@ class LoginPage extends StatefulWidget {
 }
  
 class _LoginPageState extends State<LoginPage> {
-  final _emailController = TextEditingController(text: 'kiro@gmail.com');
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _wrongPassword = false;
@@ -117,6 +119,7 @@ class _LoginPageState extends State<LoginPage> {
  
   @override
   Widget build(BuildContext context) {
+final authProvider = Provider.of<AuthProvider>(context);
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
@@ -166,7 +169,17 @@ class _LoginPageState extends State<LoginPage> {
             ),
           ],
           const SizedBox(height: 28),
-          _ContinueButton(onPressed: _onContinue),
+          _ContinueButton(onPressed: () async {
+            String? error = await authProvider.login(
+              _emailController.text,
+              _passwordController.text,
+            );
+            if (error != null) {
+              setState(() => _wrongPassword = true);
+            } else {
+              print('Login successful');
+            }
+          }),
           const SizedBox(height: 48),
           _BottomText(
             prefix: "Don't have an account? ",
@@ -191,8 +204,8 @@ class SignupPage extends StatefulWidget {
 }
  
 class _SignupPageState extends State<SignupPage> {
-  final _nameController = TextEditingController(text: 'Kirolos Raphael');
-  final _emailController = TextEditingController(text: 'kiro@gmail.com');
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
@@ -208,6 +221,7 @@ class _SignupPageState extends State<SignupPage> {
  
   @override
   Widget build(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context);
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
@@ -256,7 +270,13 @@ class _SignupPageState extends State<SignupPage> {
             ),
           ),
           const SizedBox(height: 28),
-          _ContinueButton(onPressed: () {}),
+          _ContinueButton(onPressed: () async {
+            String? error = await authProvider.signUp(
+              _emailController.text,
+              _passwordController.text,
+            );
+            print(error ?? 'Sign up successful');
+          }),
           const SizedBox(height: 48),
           _BottomText(
             prefix: 'Already have an account? ',

@@ -5,10 +5,11 @@ import 'auth/auth_provider.dart';
 import 'auth/pages/auth_page.dart';
 
 
-void main() {
+void main() async {
    WidgetsFlutterBinding.ensureInitialized();
    try {
-     Firebase.initializeApp();
+     await Firebase.initializeApp();
+     print('Firebase initialized successfully');
    } catch (e) {
      print('Error initializing Firebase: $e');
    }
