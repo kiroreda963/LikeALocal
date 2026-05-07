@@ -175,8 +175,10 @@ final authProvider = Provider.of<AuthProvider>(context);
             );
             if (error != null) {
               setState(() => _wrongPassword = true);
+              
             } else {
               print('Login successful');
+              Navigator.pushReplacementNamed(context, '/home');
             }
           }),
           const SizedBox(height: 48),

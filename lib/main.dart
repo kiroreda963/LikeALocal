@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'auth/auth_provider.dart';
 import 'auth/pages/auth_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'home/pages/home_page_main.dart';
 
 
 void main() async {
@@ -36,7 +37,11 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.black),
         useMaterial3: true,
       ),
-      home: AuthScreen(),
+      initialRoute: '/auth',
+      routes: {
+        '/auth': (context) => const AuthScreen(),
+        '/home': (context) => const MainHomePage(),
+      },
     );
   }
 }
