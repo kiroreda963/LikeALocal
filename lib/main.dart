@@ -3,13 +3,14 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'auth/auth_provider.dart';
 import 'auth/pages/auth_page.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 
 void main() async {
    WidgetsFlutterBinding.ensureInitialized();
    try {
      await Firebase.initializeApp();
-     print('Firebase initialized successfully');
+     print('Firebase initialized successfully');  
    } catch (e) {
      print('Error initializing Firebase: $e');
    }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AuthProvider with ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -18,7 +19,7 @@ class AuthProvider with ChangeNotifier {
   }
 
   // 🔐 Sign Up
-  Future<String?> signUp(String email, String password) async {
+  Future<String?> signUp(String email, String password, String name, String phoneNumber) async {
     try {
       _isLoading = true;
       notifyListeners();
@@ -27,6 +28,13 @@ class AuthProvider with ChangeNotifier {
         email: email,
         password: password,
       );
+
+      // Save user data to Firestore
+      await FirebaseFirestore.instance.collection('users').doc(_auth.currentUser!.uid).set({
+        'email': email,
+        'name': name,
+        'phoneNumber': phoneNumber,
+      });
 
       return null; // success
     } on FirebaseAuthException catch (e) {

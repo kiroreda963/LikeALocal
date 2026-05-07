@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../auth_provider.dart';
 import 'package:provider/provider.dart';
-
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
  
@@ -160,7 +159,7 @@ final authProvider = Provider.of<AuthProvider>(context);
           if (_wrongPassword) ...[
             const SizedBox(height: 6),
             const Text(
-              'Wrong password',
+              'Wrong password or email',
               style: TextStyle(
                 color: Color(0xFFD32F2F),
                 fontSize: 12,
@@ -274,8 +273,15 @@ class _SignupPageState extends State<SignupPage> {
             String? error = await authProvider.signUp(
               _emailController.text,
               _passwordController.text,
+              _nameController.text,
+              _phoneController.text,
             );
             print(error ?? 'Sign up successful');
+            if(error != null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(error)),
+              );
+            }
           }),
           const SizedBox(height: 48),
           _BottomText(
