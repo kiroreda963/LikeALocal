@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../widgets/top_bar.dart';
 import '../widgets/bottom_nav_bar.dart';
 import 'home_page.dart';
+import 'map_page.dart';
 
 
 class MainHomePage extends StatelessWidget {
@@ -27,7 +28,7 @@ class _MainShellState extends State<MainShell> {
   final List<Widget> _pages = const [
     HomePage(),
     Center(child: Text('Explore')),
-    Center(child: Text('Map')),
+    MapPage(),
     Center(child: Text('Profile')),
   ];
 
@@ -36,7 +37,7 @@ class _MainShellState extends State<MainShell> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F8F8),
       // ── Isolated Top Bar ──
-      appBar: TopBar(userName: 'Kirolos'),
+      appBar: _currentIndex == 2 ? const MapTopBar() : TopBar(userName: 'Kirolos'),
       // ── Page Body ──
       body: IndexedStack(
         index: _currentIndex,
