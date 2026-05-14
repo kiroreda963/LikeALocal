@@ -5,6 +5,7 @@ import 'auth/auth_provider.dart';
 import 'auth/pages/auth_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'Providers/PlaceProvider.dart';
+import 'messaging/pages/inbox_screen.dart';
 import 'home/pages/home_page_main.dart';
 
 void main() async {
@@ -44,6 +45,8 @@ class MyApp extends StatelessWidget {
       routes: {
         '/auth': (context) => const AuthScreen(),
         '/home': (context) => const MainHomePage(),
+        '/chat': (context) =>
+            const InboxScreen(currentUserId: 'OGGRI7AVFca8FbUgogDjPqp0QsD2'),
       },
     );
   }

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../Models/place_model.dart';
+import 'dart:math';
 
 class PlacesProvider with ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
   List<Place> _places = [];
+  List<Place> _hiddenGems = [];
   List<Place> get places => _places;
+  List<Place> get hiddenGems => _hiddenGems;
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
@@ -27,6 +29,31 @@ class PlacesProvider with ChangeNotifier {
       _places.sort((a, b) {
         return b.rating.compareTo(a.rating); // highest rating first
       });
+    } catch (e) {
+      _error = e.toString();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchHiddenGems() async {
+    try {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+
+      final snapshot = await _firestore.collection('places').get();
+
+      _hiddenGems = snapshot.docs
+          .map((doc) => Place.fromMap(doc.data()))
+          .toList();
+
+      // Shuffle randomly
+      _hiddenGems.shuffle(Random());
+
+      // Take only 5 places
+      _hiddenGems = _hiddenGems.take(5).toList();
     } catch (e) {
       _error = e.toString();
     } finally {

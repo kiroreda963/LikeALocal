@@ -74,14 +74,19 @@ class FeaturedPlaceCard extends StatelessWidget {
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      const Icon(Icons.location_on_outlined,
-                          size: 13, color: Colors.grey),
+                      const Icon(
+                        Icons.location_on_outlined,
+                        size: 13,
+                        color: Colors.grey,
+                      ),
                       const SizedBox(width: 3),
                       Expanded(
                         child: Text(
                           '$location  $distance',
                           style: const TextStyle(
-                              fontSize: 12, color: Colors.grey),
+                            fontSize: 12,
+                            color: Colors.grey,
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -90,7 +95,9 @@ class FeaturedPlaceCard extends StatelessWidget {
                   const SizedBox(height: 10),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFE8F5E9),
                       borderRadius: BorderRadius.circular(20),
@@ -107,7 +114,11 @@ class FeaturedPlaceCard extends StatelessWidget {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      const Icon(Icons.star, size: 15, color: Color(0xFFFFA000)),
+                      const Icon(
+                        Icons.star,
+                        size: 15,
+                        color: Color(0xFFFFA000),
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         rating.toString(),
@@ -121,7 +132,9 @@ class FeaturedPlaceCard extends StatelessWidget {
                       Text(
                         '($reviewCount)',
                         style: const TextStyle(
-                            fontSize: 12, color: Colors.grey),
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
                       ),
                     ],
                   ),

@@ -25,6 +25,7 @@ class _HomePageState extends State<HomePage> {
         listen: false,
       );
       placesProvider.fetchPlaces();
+      placesProvider.fetchHiddenGems();
     }
   }
 
@@ -42,67 +43,41 @@ class _HomePageState extends State<HomePage> {
         category: place.category,
       );
     }).toList();
-    // final trendingPlaces = [
-    //   TrendingPlaceData(
+
+    final hiddenGems = placesProvider.hiddenGems.map((place) {
+      return HiddenGemData(
+        imageUrl:
+            "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400",
+        name: place.placeName,
+        description: place.description,
+        location: place.category, // or add real location field later
+        category: place.category,
+        rating: place.rating,
+      );
+    }).toList();
+
+    // final hiddenGems = [
+    //   HiddenGemData(
     //     imageUrl:
-    //         'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400',
-    //     name: 'Al Khal Egyptian Restaurant',
-    //     location: 'City Stars Mall',
-    //     distance: '2 km',
-    //     rating: 4.2,
-    //     category: 'Restaurant',
-    //   ),
-    //   TrendingPlaceData(
-    //     imageUrl:
-    //         'https://images.unsplash.com/photo-1514190051997-0f6f39ca5cde?w=400',
-    //     name: 'Al Khal Egyptian Restaurant',
-    //     location: 'City Stars Mall',
-    //     distance: '2 km',
-    //     rating: 4.2,
-    //     category: 'Restaurant',
-    //   ),
-    //   TrendingPlaceData(
-    //     imageUrl:
-    //         'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400',
-    //     name: 'Nile View Restaurant',
-    //     location: 'Corniche',
-    //     distance: '3.5 km',
+    //         'https://cdn.britannica.com/65/114465-050-8C96BD81/Hall-of-Mirrors-ceiling-Jules-Hardouin-Mansart-Charles.jpg',
+    //     name: 'Manial Palace Museum',
+    //     description:
+    //         'A stunning royal palace with gardens, Islamic architecture, and a small museum inside. Very peaceful and not crowded.',
+    //     location: 'Roda Island (El Manial), Cairo',
+    //     category: 'Cultural',
     //     rating: 4.5,
-    //     category: 'Restaurant',
     //   ),
-    //   TrendingPlaceData(
+    //   HiddenGemData(
     //     imageUrl:
-    //         'https://images.unsplash.com/photo-1552566626-52f8b828add9?w=400',
-    //     name: 'Cairo Jazz Club',
-    //     location: 'Mohandessin',
-    //     distance: '5 km',
-    //     rating: 4.3,
-    //     category: 'Nightlife',
+    //         'https://cdn.britannica.com/65/114465-050-8C96BD81/Hall-of-Mirrors-ceiling-Jules-Hardouin-Mansart-Charles.jpg',
+    //     name: 'Manial Palace Museum',
+    //     description:
+    //         'A stunning royal palace with gardens, Islamic architecture, and a small museum inside. Very peaceful and not crowded.',
+    //     location: 'Roda Island (El Manial), Cairo',
+    //     category: 'Cultural',
+    //     rating: 4.5,
     //   ),
     // ];
-
-    final hiddenGems = [
-      HiddenGemData(
-        imageUrl:
-            'https://cdn.britannica.com/65/114465-050-8C96BD81/Hall-of-Mirrors-ceiling-Jules-Hardouin-Mansart-Charles.jpg',
-        name: 'Manial Palace Museum',
-        description:
-            'A stunning royal palace with gardens, Islamic architecture, and a small museum inside. Very peaceful and not crowded.',
-        location: 'Roda Island (El Manial), Cairo',
-        category: 'Cultural',
-        rating: 4.5,
-      ),
-      HiddenGemData(
-        imageUrl:
-            'https://cdn.britannica.com/65/114465-050-8C96BD81/Hall-of-Mirrors-ceiling-Jules-Hardouin-Mansart-Charles.jpg',
-        name: 'Manial Palace Museum',
-        description:
-            'A stunning royal palace with gardens, Islamic architecture, and a small museum inside. Very peaceful and not crowded.',
-        location: 'Roda Island (El Manial), Cairo',
-        category: 'Cultural',
-        rating: 4.5,
-      ),
-    ];
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
