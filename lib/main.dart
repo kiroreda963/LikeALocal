@@ -47,6 +47,7 @@ class MyApp extends StatelessWidget {
         '/home': (context) => const MainHomePage(),
         '/chat': (context) =>
             const InboxScreen(currentUserId: 'OGGRI7AVFca8FbUgogDjPqp0QsD2'),
+        '/add-place': (context) => const AddPlacePage(),
       },
     );
   }
