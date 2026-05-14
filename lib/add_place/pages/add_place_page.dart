@@ -143,9 +143,9 @@ class _AddPlacePageState extends State<AddPlacePage> {
         longitude = null;
       });
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error publishing place: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error publishing place: $e')));
     }
 
     setState(() {
@@ -171,7 +171,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF8EEEE),
+        backgroundColor: const Color.fromARGB(255, 219, 219, 219),
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
@@ -390,7 +390,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
                                     child: const Icon(
                                       Icons.location_on,
                                       size: 45,
-                                      color: Color(0xFF8A4D61),
+                                      color: Color.fromARGB(255, 0, 0, 0),
                                     ),
                                   ),
                                 ],
@@ -407,7 +407,12 @@ class _AddPlacePageState extends State<AddPlacePage> {
                             label: const Text('Use current'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.white,
-                              foregroundColor: const Color(0xFF8A4D61),
+                              foregroundColor: const Color.fromARGB(
+                                255,
+                                100,
+                                100,
+                                100,
+                              ),
                             ),
                           ),
                         ),
@@ -426,7 +431,10 @@ class _AddPlacePageState extends State<AddPlacePage> {
                   const SizedBox(height: 8),
                   const Text(
                     'Tap the map or use current location',
-                    style: TextStyle(fontSize: 14, color: Colors.grey),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Color.fromRGBO(158, 158, 158, 1),
+                    ),
                   ),
                 ],
 
@@ -437,7 +445,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
                   height: 60,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFF8E6EA),
+                      backgroundColor: const Color.fromARGB(255, 219, 219, 219),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(30),
                       ),
@@ -450,7 +458,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
                             style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF8A4D61),
+                              color: Color.fromARGB(255, 0, 0, 0),
                             ),
                           ),
                   ),
