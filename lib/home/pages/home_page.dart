@@ -2,50 +2,84 @@ import 'package:flutter/material.dart';
 import '../widgets/featured_place_card.dart';
 import '../widgets/hidden_gem_card.dart';
 import '../widgets/trending_places_section.dart';
+import '../../Providers/PlaceProvider.dart';
+import 'package:provider/provider.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  bool _didFetch = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_didFetch) {
+      _didFetch = true;
+      final placesProvider = Provider.of<PlacesProvider>(
+        context,
+        listen: false,
+      );
+      placesProvider.fetchPlaces();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final trendingPlaces = [
-      TrendingPlaceData(
+    final placesProvider = Provider.of<PlacesProvider>(context);
+    final trendingPlaces = placesProvider.places.map((place) {
+      return TrendingPlaceData(
         imageUrl:
-            'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400',
-        name: 'Al Khal Egyptian Restaurant',
-        location: 'City Stars Mall',
-        distance: '2 km',
-        rating: 4.2,
-        category: 'Restaurant',
-      ),
-      TrendingPlaceData(
-        imageUrl:
-            'https://images.unsplash.com/photo-1514190051997-0f6f39ca5cde?w=400',
-        name: 'Al Khal Egyptian Restaurant',
-        location: 'City Stars Mall',
-        distance: '2 km',
-        rating: 4.2,
-        category: 'Restaurant',
-      ),
-      TrendingPlaceData(
-        imageUrl:
-            'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400',
-        name: 'Nile View Restaurant',
-        location: 'Corniche',
-        distance: '3.5 km',
-        rating: 4.5,
-        category: 'Restaurant',
-      ),
-      TrendingPlaceData(
-        imageUrl:
-            'https://images.unsplash.com/photo-1552566626-52f8b828add9?w=400',
-        name: 'Cairo Jazz Club',
-        location: 'Mohandessin',
-        distance: '5 km',
-        rating: 4.3,
-        category: 'Nightlife',
-      ),
-    ];
+            "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400",
+        name: place.placeName,
+        location: place.category, // or add real location field later
+        distance: '2 km', // placeholder for now (you can calculate later)
+        rating: place.rating,
+        category: place.category,
+      );
+    }).toList();
+    // final trendingPlaces = [
+    //   TrendingPlaceData(
+    //     imageUrl:
+    //         'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400',
+    //     name: 'Al Khal Egyptian Restaurant',
+    //     location: 'City Stars Mall',
+    //     distance: '2 km',
+    //     rating: 4.2,
+    //     category: 'Restaurant',
+    //   ),
+    //   TrendingPlaceData(
+    //     imageUrl:
+    //         'https://images.unsplash.com/photo-1514190051997-0f6f39ca5cde?w=400',
+    //     name: 'Al Khal Egyptian Restaurant',
+    //     location: 'City Stars Mall',
+    //     distance: '2 km',
+    //     rating: 4.2,
+    //     category: 'Restaurant',
+    //   ),
+    //   TrendingPlaceData(
+    //     imageUrl:
+    //         'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400',
+    //     name: 'Nile View Restaurant',
+    //     location: 'Corniche',
+    //     distance: '3.5 km',
+    //     rating: 4.5,
+    //     category: 'Restaurant',
+    //   ),
+    //   TrendingPlaceData(
+    //     imageUrl:
+    //         'https://images.unsplash.com/photo-1552566626-52f8b828add9?w=400',
+    //     name: 'Cairo Jazz Club',
+    //     location: 'Mohandessin',
+    //     distance: '5 km',
+    //     rating: 4.3,
+    //     category: 'Nightlife',
+    //   ),
+    // ];
 
     final hiddenGems = [
       HiddenGemData(

@@ -19,7 +19,12 @@ class AuthProvider with ChangeNotifier {
   }
 
   // 🔐 Sign Up
-  Future<String?> signUp(String email, String password, String name, String phoneNumber) async {
+  Future<String?> signUp(
+    String email,
+    String password,
+    String name,
+    String phoneNumber,
+  ) async {
     try {
       _isLoading = true;
       notifyListeners();
@@ -30,11 +35,10 @@ class AuthProvider with ChangeNotifier {
       );
 
       // Save user data to Firestore
-      await FirebaseFirestore.instance.collection('users').doc(_auth.currentUser!.uid).set({
-        'email': email,
-        'name': name,
-        'phoneNumber': phoneNumber,
-      });
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_auth.currentUser!.uid)
+          .set({'email': email, 'name': name, 'phoneNumber': phoneNumber});
 
       return null; // success
     } on FirebaseAuthException catch (e) {
@@ -51,10 +55,7 @@ class AuthProvider with ChangeNotifier {
       _isLoading = true;
       notifyListeners();
 
-      await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      await _auth.signInWithEmailAndPassword(email: email, password: password);
 
       return null;
     } on FirebaseAuthException catch (e) {
@@ -68,5 +69,20 @@ class AuthProvider with ChangeNotifier {
   // 🚪 Logout
   Future<void> logout() async {
     await _auth.signOut();
+  }
+
+  Future<String?> getUserName() async {
+    try {
+      final uid = _auth.currentUser!.uid;
+
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+
+      return doc.data()?['name'];
+    } catch (e) {
+      return null;
+    }
   }
 }
