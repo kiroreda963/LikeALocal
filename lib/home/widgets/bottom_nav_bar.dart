@@ -37,9 +37,9 @@ class BottomNavBar extends StatelessWidget {
                 onTap: () => onTap(0),
               ),
               _NavItem(
-                icon: Icons.search_outlined,
-                activeIcon: Icons.search,
-                label: 'Explore',
+                icon: Icons.chat_bubble_outline,
+                activeIcon: Icons.chat_bubble,
+                label: 'AI',
                 isActive: currentIndex == 1,
                 onTap: () => onTap(1),
               ),
