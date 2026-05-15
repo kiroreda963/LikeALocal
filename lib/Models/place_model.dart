@@ -1,45 +1,37 @@
 class Place {
   final String placeName;
-  final String author;
-  final String priceRange;
   final String description;
   final String category;
   final double rating;
   final String imageUrl;
+  final String location;
+  final String priceRange;
+  final String? website; // NEW: Optional field
+  final String? phoneNumber; // NEW: Optional field
 
   Place({
     required this.placeName,
-    required this.author,
-    required this.priceRange,
     required this.description,
     required this.category,
     required this.rating,
     required this.imageUrl,
+    required this.location,
+    required this.priceRange,
+    this.website,
+    this.phoneNumber
   });
 
-  // Convert Firestore/JSON to Place object
   factory Place.fromMap(Map<String, dynamic> map) {
     return Place(
       placeName: map['placeName'] ?? '',
-      author: map['author'] ?? '',
-      priceRange: map['priceRange'] ?? '',
       description: map['description'] ?? '',
       category: map['category'] ?? '',
-      rating: (map['rating'] ?? 0).toDouble(),
+      rating: (map['rating'] ?? 0.0).toDouble(),
       imageUrl: map['imageUrl'] ?? '',
+      location: map['location'] ?? '',
+      priceRange: map['priceRange'] ?? '',
+      website: map['website'], // Will be null if not in Firestore
+      phoneNumber: map['phoneNumber'], // Will be null if not in Firestore
     );
-  }
-
-  // Convert Place object to Map
-  Map<String, dynamic> toMap() {
-    return {
-      'placeName': placeName,
-      'author': author,
-      'priceRange': priceRange,
-      'description': description,
-      'category': category,
-      'rating': rating,
-      'imageUrl': imageUrl,
-    };
   }
 }

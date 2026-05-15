@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:likealocal/home/pages/explore_page.dart';
 import '../widgets/top_bar.dart';
 import '../widgets/bottom_nav_bar.dart';
 import 'home_page.dart';
@@ -28,7 +29,7 @@ class _MainShellState extends State<MainShell> {
   // Pages can be extended as needed
   final List<Widget> _pages = const [
     HomePage(),
-    Center(child: Text('Explore')),
+    ExplorePage(),
     Center(child: Text('Map')),
     Center(child: Text('Profile')),
   ];

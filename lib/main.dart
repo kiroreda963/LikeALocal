@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:likealocal/home/pages/explore_page.dart';
 import 'package:provider/provider.dart';
 import 'auth/auth_provider.dart';
 import 'auth/pages/auth_page.dart';
@@ -44,6 +45,7 @@ class MyApp extends StatelessWidget {
       routes: {
         '/auth': (context) => const AuthScreen(),
         '/home': (context) => const MainHomePage(),
+        '/explore': (context) => const ExplorePage(),
       },
     );
   }
