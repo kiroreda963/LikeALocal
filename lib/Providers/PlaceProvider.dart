@@ -25,7 +25,7 @@ class PlacesProvider with ChangeNotifier {
 
       final snapshot = await _firestore.collection('places').get();
 
-      _places = snapshot.docs.map((doc) => Place.fromMap(doc.data())).toList();
+      _places = snapshot.docs.map((doc) => Place.fromMap(doc.data(), doc.id)).toList();
       _places.sort((a, b) {
         return b.rating.compareTo(a.rating); // highest rating first
       });
@@ -46,7 +46,7 @@ class PlacesProvider with ChangeNotifier {
       final snapshot = await _firestore.collection('places').get();
 
       _hiddenGems = snapshot.docs
-          .map((doc) => Place.fromMap(doc.data()))
+          .map((doc) => Place.fromMap(doc.data(), doc.id))
           .toList();
 
       // Shuffle randomly
@@ -80,7 +80,7 @@ class PlacesProvider with ChangeNotifier {
       final doc = await _firestore.collection('places').doc(id).get();
 
       if (doc.exists) {
-        return Place.fromMap(doc.data()!);
+        return Place.fromMap(doc.data()!, doc.id);
       }
       return null;
     } catch (e) {

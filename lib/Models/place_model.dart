@@ -1,4 +1,5 @@
 class Place {
+  
   final String placeName;
   final String author;
   final String priceRange;
@@ -6,8 +7,12 @@ class Place {
   final String category;
   final double rating;
   final String imageUrl;
+  final String documentId;
+  
 
   Place({
+    
+    required this.documentId,
     required this.placeName,
     required this.author,
     required this.priceRange,
@@ -18,15 +23,17 @@ class Place {
   });
 
   // Convert Firestore/JSON to Place object
-  factory Place.fromMap(Map<String, dynamic> map) {
+  factory Place.fromMap(Map<String, dynamic> map, String documentId) {
     return Place(
+      
+      documentId: documentId,
       placeName: map['placeName'] ?? '',
       author: map['author'] ?? '',
       priceRange: map['priceRange'] ?? '',
       description: map['description'] ?? '',
       category: map['category'] ?? '',
       rating: (map['rating'] ?? 0).toDouble(),
-      imageUrl: map['imageUrl'] ?? '',
+      imageUrl: map['imageName'] ?? '',
     );
   }
 

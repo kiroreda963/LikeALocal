@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'edit_profile_page.dart';
 import 'favorite_places_page.dart';
-import 'saved_places_page.dart';
+import 'my_places_page.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
@@ -96,7 +96,7 @@ class ProfilePage extends StatelessWidget {
                 _buildTile(
                   context,
                   icon: Icons.favorite_border,
-                  title: "Favorite Places",
+                  title: "Favourite Places",
                   page: const FavoritePlacesPage(),
                 ),
 
@@ -105,8 +105,8 @@ class ProfilePage extends StatelessWidget {
                 _buildTile(
                   context,
                   icon: Icons.bookmark_border,
-                  title: "Saved Places",
-                  page: const SavedPlacesPage(),
+                  title: "My Places",
+                  page: const MyPlacesPage(),
                 ),
               ],
             ),

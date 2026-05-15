@@ -2,18 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../Models/place_model.dart';
 
-class FavoritePlacesPage extends StatelessWidget {
-  const FavoritePlacesPage({super.key});
+class MyPlacesPage extends StatelessWidget {
+  const MyPlacesPage({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Favourite Places"),
+        title: const Text("My Places"),
       ),
 
       body: FutureBuilder(
-        future: FirebaseFirestore.instance.collection('favoritePlaces').get(),
+        future: FirebaseFirestore.instance.collection('myPlaces').get(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(
