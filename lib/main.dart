@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'Providers/PlaceProvider.dart';
 import 'messaging/pages/inbox_screen.dart';
 import 'home/pages/home_page_main.dart';
+import '../messaging/messaging_service.dart';
 import './add_place/pages/add_place_page.dart';
 
 void main() async {
@@ -17,6 +18,23 @@ void main() async {
   } catch (e) {
     print('Error initializing Firebase: $e');
   }
+  // await FirebaseFirestore.instance.collection('conversations').doc('conv1').set(
+  //   {
+  //     'participants': ['OGGRI7AVFca8FbUgogDjPqp0QsD2', 'user2'],
+  //     'lastMessage': '',
+  //     'lastMessageTime': Timestamp.now(),
+  //   },
+  // );
+  // sendmessage(senderId, Text) async {
+  //   final messagingService = MessagingService();
+  //   await messagingService.sendMessage(
+  //     conversationId: 'conv1',
+  //     senderId: senderId,
+  //     text: Text,
+  //   );
+  //   print('Message sent!');
+  // }
+
   runApp(
     MultiProvider(
       providers: [
@@ -26,6 +44,9 @@ void main() async {
       child: MyApp(),
     ),
   );
+  // await sendmessage("OGGRI7AVFca8FbUgogDjPqp0QsD2", 'Hello from main!');
+  // await Future.delayed(Duration(seconds: 20));
+  // await sendmessage("user2", 'Hello from user2!');
 }
 
 class MyApp extends StatelessWidget {
