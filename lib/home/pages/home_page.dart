@@ -20,12 +20,14 @@ class _HomePageState extends State<HomePage> {
     super.didChangeDependencies();
     if (!_didFetch) {
       _didFetch = true;
+     WidgetsBinding.instance.addPostFrameCallback((_) { 
       final placesProvider = Provider.of<PlacesProvider>(
         context,
         listen: false,
       );
       placesProvider.fetchPlaces();
       placesProvider.fetchHiddenGems();
+     });
     }
   }
 

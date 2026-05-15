@@ -9,6 +9,7 @@ import 'messaging/pages/inbox_screen.dart';
 import 'home/pages/home_page_main.dart';
 import './add_place/pages/add_place_page.dart';
 
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
