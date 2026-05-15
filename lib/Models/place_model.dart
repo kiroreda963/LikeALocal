@@ -2,6 +2,8 @@ class Place {
   final String placeName;
   final String author;
   final String priceRange;
+  final double longitude;
+  final double latitude;
   final String description;
   final String category;
   final double rating;
@@ -11,6 +13,8 @@ class Place {
     required this.placeName,
     required this.author,
     required this.priceRange,
+    required this.longitude,
+    required this.latitude,
     required this.description,
     required this.category,
     required this.rating,
@@ -23,6 +27,8 @@ class Place {
       placeName: map['placeName'] ?? '',
       author: map['author'] ?? '',
       priceRange: map['priceRange'] ?? '',
+      longitude: (map['longitude'] ?? 0).toDouble(),
+      latitude: (map['latitude'] ?? 0).toDouble(),
       description: map['description'] ?? '',
       category: map['category'] ?? '',
       rating: (map['rating'] ?? 0).toDouble(),
@@ -36,6 +42,8 @@ class Place {
       'placeName': placeName,
       'author': author,
       'priceRange': priceRange,
+      'longitude': longitude,
+      'latitude': latitude,
       'description': description,
       'category': category,
       'rating': rating,

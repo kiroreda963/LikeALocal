@@ -9,7 +9,9 @@ class PlacesProvider with ChangeNotifier {
   List<Place> _hiddenGems = [];
   List<Place> get places => _places;
   List<Place> get hiddenGems => _hiddenGems;
+  String get selectedCategory => _selectedCategory;
 
+  String _selectedCategory = 'All';
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
@@ -72,6 +74,16 @@ class PlacesProvider with ChangeNotifier {
       _error = e.toString();
       notifyListeners();
     }
+  }
+
+  List<Place> get filteredPlaces {
+    if (_selectedCategory == 'All') return _places;
+    return _places.where((p) => p.category == _selectedCategory).toList();
+  }
+
+  void setCategory(String category) {
+    _selectedCategory = category;
+    notifyListeners(); // UI will rebuild when a category is clicked
   }
 
   // 🔍 Get single place by id (optional)
