@@ -77,8 +77,11 @@ class PlacesProvider with ChangeNotifier {
   }
 
   List<Place> get filteredPlaces {
-    if (_selectedCategory == 'All') return _places;
-    return _places.where((p) => p.category == _selectedCategory).toList();
+    return _places.where((p) {
+      final matchesCategory = _selectedCategory == 'All' || p.category == _selectedCategory;
+      final matchesPrice = _selectedPrice == 'All' || p.priceRange == _selectedPrice;
+      return matchesCategory && matchesPrice;
+    }).toList();
   }
 
   void setCategory(String category) {
@@ -98,5 +101,12 @@ class PlacesProvider with ChangeNotifier {
     } catch (e) {
       return null;
     }
+  }
+  String _selectedPrice = 'All'; // Default state
+  String get selectedPrice => _selectedPrice;
+
+  void setPriceRange(String price) {
+    _selectedPrice = price;
+    notifyListeners();
   }
 }

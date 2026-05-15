@@ -35,10 +35,6 @@ class _ExplorePageState extends State<ExplorePage> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: const Padding(
-          padding: EdgeInsets.all(8.0),
-          child: CircleAvatar(child: Icon(Icons.person)),
-        ),
         title: const Text('Explore', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         centerTitle: true,
       ),
@@ -49,6 +45,28 @@ class _ExplorePageState extends State<ExplorePage> {
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
           child: Column(
             children: [
+
+              const Center(
+                child: Text("Price Range", style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: ['All', r'$', r'$$', r'$$$',r'$$$$'].map((price) {
+                  final isSelected = provider.selectedPrice == price;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8.0),
+                    child: ChoiceChip(
+                      label: Text(price),
+                      selected: isSelected,
+                      selectedColor: Colors.grey.shade400,
+                      backgroundColor: Colors.grey.shade100,
+                      onSelected: (bool selected) {
+                        provider.setPriceRange(selected ? price : 'All');
+                      },
+                    ),
+                  );
+                }).toList(),
+              ),
               const SizedBox(height: 20),
               GridView.builder(
                 shrinkWrap: true,
@@ -59,12 +77,12 @@ class _ExplorePageState extends State<ExplorePage> {
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,
                 ),
-                itemCount: 6, // Matches the 6 categories in your screenshot
+                itemCount: 5,
                 itemBuilder: (context, index) {
                   final categories = [
                     'Top Rated', 'Trending Now',
                     'Feeling Hungry', 'Looking for a Breeze',
-                    'Up Late?', 'A Low Budget'
+                    'Up Late?'
                   ];
                   final category = categories[index];
                   final isSelected = provider.selectedCategory == category;
@@ -98,10 +116,10 @@ class _ExplorePageState extends State<ExplorePage> {
                     description: place.description,
                     rating: place.rating.toString(),
                     imageUrl: place.imageUrl,
-                    locationUrl: place.location,
-                    phoneNumber: place.phoneNumber,
-                    website: place.website,
-                  );
+                      longitude: place.longitude,
+                      latitude: place.latitude,
+                    locationUrl: 'https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}',
+                                      );
                 },
               ),
             ],
@@ -117,8 +135,9 @@ class _ExplorePageState extends State<ExplorePage> {
     required String rating,
     required String imageUrl,
     required String locationUrl,
-    String? website,    // Made nullable
-    String? phoneNumber,
+    required double longitude,
+    required double latitude,
+
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -180,20 +199,10 @@ class _ExplorePageState extends State<ExplorePage> {
             children: [
               _buildCardButton('Look \nOn maps', Icons.location_on_outlined, () => _launchURL(locationUrl)),
               const SizedBox(width: 8),
-              if (website != null && website.isNotEmpty) ...[
-                const SizedBox(width: 8),
-                _buildCardButton('Visit \nWebsite', Icons.language, () => _launchURL(website)),
+             _buildCardButton("Chat with Post Owner", Icons.chat_bubble_outline, () => ("gg") )
               ],
-
-              // Conditional Phone Button
-              if (phoneNumber != null && phoneNumber.isNotEmpty) ...[
-                const SizedBox(width: 8),
-                _buildCardButton('Call \nUs', Icons.phone, () => _launchURL('tel:$phoneNumber')),
-              ],
-            ],
-          )
-        ],
-      ),
+          )],
+              ),
     );
   }
 
