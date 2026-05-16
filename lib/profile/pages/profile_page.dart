@@ -98,7 +98,7 @@ class ProfilePage extends StatelessWidget {
                 _divider(),
                 _buildTile(
                   context,
-                  icon: Icons.bookmark_border,
+                  icon: Icons.workspace_premium,
                   title: "Subscriptions",
                   page: const SubscriptionPage(),
                 ),

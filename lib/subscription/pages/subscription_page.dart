@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../auth/auth_provider.dart' as local_auth;
 
 class SubscriptionPage extends StatefulWidget {
   const SubscriptionPage({super.key});
@@ -11,36 +14,77 @@ class SubscriptionPage extends StatefulWidget {
 class _SubscriptionPageState extends State<SubscriptionPage> {
   bool isPremium = false;
   bool isLoading = false;
+  String? _userId;
 
-  Future<void> activatePremium() async {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadSubscriptionStatus();
+    });
+  }
+
+  Future<void> _loadSubscriptionStatus() async {
+    final authProvider = context.read<local_auth.AuthProvider>();
+    final user = await authProvider.getAllUserInfo();
+    if (!mounted) return;
+
+    setState(() {
+      _userId = user?.uid;
+      isPremium = user?.isPremium ?? false;
+    });
+  }
+
+  Future<void> _togglePremium() async {
+    final firebaseUser = FirebaseAuth.instance.currentUser;
+    if (firebaseUser == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in to manage subscription')),
+      );
+      return;
+    }
+
+    final uid = _userId ?? firebaseUser.uid;
+    final nextValue = !isPremium;
+
+    final messenger = ScaffoldMessenger.of(context);
+
     setState(() {
       isLoading = true;
     });
 
     try {
-      await FirebaseFirestore.instance.collection('subscriptions').add({
-        'isPremium': true,
-        'plan': 'monthly',
-        'price': 4.99,
-        'activatedAt': FieldValue.serverTimestamp(),
-      });
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'isPremium': nextValue,
+      }, SetOptions(merge: true));
 
+      if (!mounted) return;
       setState(() {
-        isPremium = true;
+        _userId = uid;
+        isPremium = nextValue;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Premium activated successfully!')),
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            nextValue
+                ? 'Premium activated successfully!'
+                : 'Unsubscribed from premium successfully!',
+          ),
+        ),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error activating premium: $e')),
+      messenger.showSnackBar(
+        SnackBar(content: Text('Error updating subscription: $e')),
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
     }
-
-    setState(() {
-      isLoading = false;
-    });
   }
 
   @override
@@ -97,11 +141,20 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                 ),
                 const SizedBox(height: 40),
                 premiumFeature(Icons.place, 'Unlimited hidden gem uploads'),
-                premiumFeature(Icons.travel_explore, 'AI travel recommendations'),
+                premiumFeature(
+                  Icons.travel_explore,
+                  'AI travel recommendations',
+                ),
                 premiumFeature(Icons.map, 'Advanced interactive maps'),
-                premiumFeature(Icons.bookmark, 'Save unlimited favorite places'),
+                premiumFeature(
+                  Icons.bookmark,
+                  'Save unlimited favorite places',
+                ),
                 premiumFeature(Icons.star, 'Access exclusive local spots'),
-                premiumFeature(Icons.notifications_active, 'Priority travel alerts'),
+                premiumFeature(
+                  Icons.notifications_active,
+                  'Priority travel alerts',
+                ),
                 const SizedBox(height: 40),
                 Container(
                   width: double.infinity,
@@ -123,7 +176,9 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        isPremium ? 'Enjoy your premium access' : 'Cancel anytime',
+                        isPremium
+                            ? 'Enjoy your premium access'
+                            : 'Cancel anytime',
                         style: TextStyle(color: Colors.grey.shade700),
                       ),
                       const SizedBox(height: 25),
@@ -131,7 +186,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                         width: double.infinity,
                         height: 55,
                         child: ElevatedButton(
-                          onPressed: isPremium || isLoading ? null : activatePremium,
+                          onPressed: isLoading ? null : _togglePremium,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.black,
                             disabledBackgroundColor: Colors.grey.shade500,
@@ -140,9 +195,13 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                             ),
                           ),
                           child: isLoading
-                              ? const CircularProgressIndicator(color: Colors.white)
+                              ? const CircularProgressIndicator(
+                                  color: Colors.white,
+                                )
                               : Text(
-                                  isPremium ? 'Premium Active' : 'Start Premium',
+                                  isPremium
+                                      ? 'Cancel Premium'
+                                      : 'Start Premium',
                                   style: const TextStyle(
                                     fontSize: 18,
                                     color: Colors.white,
