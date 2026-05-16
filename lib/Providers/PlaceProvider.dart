@@ -120,87 +120,72 @@ class PlacesProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // ❤️ Add place to favorites
-  Future<void> addFavorite(String userId, String placeId) async {
-    try {
-      final placeRef = _firestore.collection('places').doc(placeId);
-      final favoriteRef = _firestore
-          .collection('favorites')
-          .doc('${userId}_${placeId}');
-
-      await Future.wait([
-        placeRef.update({
-          'favoredByUsers': FieldValue.arrayUnion([userId]),
-        }),
-        favoriteRef.set({
-          'userId': userId,
-          'placeId': placeId,
-          'createdAt': FieldValue.serverTimestamp(),
-        }),
-      ]);
-
-      // Update local place
-      final placeIndex = _places.indexWhere((p) => p.id == placeId);
-      if (placeIndex != -1) {
-        final updatedPlace = _places[placeIndex].copyWith(
-          favoredByUsers: [..._places[placeIndex].favoredByUsers, userId],
-        );
-        _places[placeIndex] = updatedPlace;
-        notifyListeners();
-      }
-    } catch (e) {
-      _error = e.toString();
-      notifyListeners();
-    }
+// In your PlaceProvider or UserProvider
+Future<void> addFavorite(String userId, String placeId) async {
+  try {
+    final userDoc = FirebaseFirestore.instance.collection('users').doc(userId);
+    await userDoc.update({
+      'favoredPlaces': FieldValue.arrayUnion([placeId])
+    });
+  } catch (e) {
+    debugPrint('Error adding favorite: $e');
   }
+}
 
-  // 💔 Remove place from favorites
-  Future<void> removeFavorite(String userId, String placeId) async {
-    try {
-      final placeRef = _firestore.collection('places').doc(placeId);
-      final favoriteRef = _firestore
-          .collection('favorites')
-          .doc('${userId}_${placeId}');
-
-      await Future.wait([
-        placeRef.update({
-          'favoredByUsers': FieldValue.arrayRemove([userId]),
-        }),
-        favoriteRef.delete(),
-      ]);
-
-      // Update local place
-      final placeIndex = _places.indexWhere((p) => p.id == placeId);
-      if (placeIndex != -1) {
-        final updatedFavoredByUsers = List<String>.from(
-          _places[placeIndex].favoredByUsers,
-        );
-        updatedFavoredByUsers.remove(userId);
-
-        final updatedPlace = _places[placeIndex].copyWith(
-          favoredByUsers: updatedFavoredByUsers,
-        );
-        _places[placeIndex] = updatedPlace;
-        notifyListeners();
-      }
-    } catch (e) {
-      _error = e.toString();
-      notifyListeners();
-    }
+Future<void> removeFavorite(String userId, String placeId) async {
+  try {
+    final userDoc = FirebaseFirestore.instance.collection('users').doc(userId);
+    await userDoc.update({
+      'favoredPlaces': FieldValue.arrayRemove([placeId])
+    });
+  } catch (e) {
+    debugPrint('Error removing favorite: $e');
   }
+}
 
-  // ✅ Check if place is favorited by user
-  Future<bool> isFavorited(String userId, String placeId) async {
-    try {
-      final doc = await _firestore
-          .collection('favorites')
-          .doc('${userId}_${placeId}')
-          .get();
-      return doc.exists;
-    } catch (e) {
-      return false;
-    }
+Future<bool> isFavorited(String userId, String placeId) async {
+  try {
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .get();
+    
+    if (!userDoc.exists) return false;
+    
+    final favoredPlaces = List<String>.from(userDoc['favoredPlaces'] ?? []);
+    return favoredPlaces.contains(placeId);
+  } catch (e) {
+    debugPrint('Error checking favorite: $e');
+    return false;
   }
+}
+
+Future<List<Place>> getFavorites(String userId) async {
+  try {
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .get();
+    
+    if (!userDoc.exists) return [];
+    
+    final favoredPlaceIds = List<String>.from(userDoc['favoredPlaces'] ?? []);
+    
+    if (favoredPlaceIds.isEmpty) return [];
+    
+    final placesSnapshot = await FirebaseFirestore.instance
+        .collection('places')
+        .where(FieldPath.documentId, whereIn: favoredPlaceIds)
+        .get();
+    
+    return placesSnapshot.docs
+        .map((doc) => Place.fromMap(doc.data(), doc.id))
+        .toList();
+  } catch (e) {
+    debugPrint('Error getting favorites: $e');
+    return [];
+  }
+}
 
   // 📝 Add review to place
   Future<void> addReview({
