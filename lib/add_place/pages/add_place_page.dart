@@ -311,15 +311,28 @@ class _AddPlacePageState extends State<AddPlacePage> {
                   hint: const Text('Select category'),
                   items: const [
                     DropdownMenuItem(
-                      value: 'Restaurant',
-                      child: Text('Restaurant'),
+                      value: 'Historical Places',
+                      child: Text('Historical Places'),
                     ),
-                    DropdownMenuItem(value: 'Cafe', child: Text('Cafe')),
-                    DropdownMenuItem(value: 'Hotel', child: Text('Hotel')),
-                    DropdownMenuItem(value: 'Museum', child: Text('Museum')),
                     DropdownMenuItem(
-                      value: 'Hidden Gem',
-                      child: Text('Hidden Gem'),
+                      value: 'Restaurants & Cafes',
+                      child: Text('Restaurants & Cafes'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Shopping',
+                      child: Text('Shopping'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Entertainment',
+                      child: Text('Entertainment'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Nightlife',
+                      child: Text('Nightlife'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Beaches & Resorts',
+                      child: Text('Beaches & Resorts'),
                     ),
                   ],
                   onChanged: (value) {
@@ -345,13 +358,16 @@ class _AddPlacePageState extends State<AddPlacePage> {
                   ),
                   hint: const Text('Select price range'),
                   items: const [
-                    DropdownMenuItem(value: '\$', child: Text('\$')),
-                    DropdownMenuItem(value: '\$\$', child: Text('\$\$')),
-                    DropdownMenuItem(value: '\$\$\$', child: Text('\$\$\$')),
+                    DropdownMenuItem(value: '<15', child: Text('Under \$15')),
                     DropdownMenuItem(
-                      value: '\$\$\$\$',
-                      child: Text('\$\$\$\$'),
+                      value: '15-40',
+                      child: Text('\$15 – \$40'),
                     ),
+                    DropdownMenuItem(
+                      value: '40-100',
+                      child: Text('\$40 – \$100'),
+                    ),
+                    DropdownMenuItem(value: '100+', child: Text('Over \$100')),
                   ],
                   onChanged: (value) {
                     setState(() {
