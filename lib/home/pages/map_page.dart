@@ -814,6 +814,7 @@ class _MapPageState extends State<MapPage> {
       builder: (context) {
         return AlertDialog(
           title: Text('Message about ${place.placeName}'),
+          backgroundColor: Colors.white,
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -860,10 +861,12 @@ class _MapPageState extends State<MapPage> {
               TextField(
                 controller: messageController,
                 maxLines: 4,
+
                 decoration: InputDecoration(
                   hintText: 'Ask about this place...',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
                   ),
                 ),
               ),
@@ -872,7 +875,10 @@ class _MapPageState extends State<MapPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Color.fromARGB(255, 0, 0, 0)),
+              ),
             ),
             ElevatedButton(
               onPressed: () async {
@@ -888,9 +894,12 @@ class _MapPageState extends State<MapPage> {
                 await _openChatWithAuthor(place, messageText);
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF143C23),
+                backgroundColor: const Color.fromARGB(255, 255, 255, 255),
               ),
-              child: const Text('Send'),
+              child: const Text(
+                'Send',
+                style: TextStyle(color: Color.fromARGB(255, 0, 0, 0)),
+              ),
             ),
           ],
         );
