@@ -308,8 +308,7 @@ class _MapPageState extends State<MapPage> {
                           place: selectedPlace,
                           distanceKm: _distanceKm(selectedPlace),
                           onReviews: () => _showReviews(selectedPlace),
-                          onAddReview: () =>
-                              _showAddReviewDialog(selectedPlace),
+                          onChat: () => _showChatDialog(selectedPlace),
                         ),
                       ),
                   ],
@@ -330,240 +329,315 @@ class _MapPageState extends State<MapPage> {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+        return DraggableScrollableSheet(
+          expand: false,
+          builder: (context, scrollController) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Text(
-                      '${place.placeName} Reviews',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${place.placeName} Reviews',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
                       ),
-                    ),
+                      const Icon(Icons.star,
+                          color: Color(0xFFFFCA28), size: 20),
+                      Text(
+                        place.rating.toStringAsFixed(1),
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ],
                   ),
-                  const Icon(Icons.star, color: Color(0xFFFFCA28), size: 20),
-                  Text(
-                    place.rating.toStringAsFixed(1),
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              if (reviews.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: Text('No reviews yet. Be the first to review!'),
-                )
-              else
-                ...reviews.map(
-                  (review) {
-                    final currentUser = FirebaseAuth.instance.currentUser;
-                    final isMine =
-                        currentUser != null && review.userId == currentUser.uid;
-                    final displayName = review.userName.isNotEmpty
-                        ? review.userName
-                        : 'Anonymous';
-                    final avatarLetter = displayName.isNotEmpty
-                        ? displayName[0].toUpperCase()
-                        : '?';
-
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      controller: scrollController,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 14,
-                                child: Text(avatarLetter),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            displayName,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 12,
+                          if (reviews.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.all(8),
+                              child: Text(
+                                  'No reviews yet. Be the first to review!'),
+                            )
+                          else
+                            ...reviews.map(
+                              (review) {
+                                final currentUser =
+                                    FirebaseAuth.instance.currentUser;
+                                final isMine = currentUser != null &&
+                                    review.userId == currentUser.uid;
+                                final displayName = review.userName.isNotEmpty
+                                    ? review.userName
+                                    : 'Anonymous';
+                                final avatarLetter =
+                                    displayName.isNotEmpty
+                                        ? displayName[0].toUpperCase()
+                                        : '?';
+
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 16),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 16,
+                                            child: Text(avatarLetter),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Expanded(
+                                                      child: Text(
+                                                        displayName,
+                                                        style: const TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                          fontSize: 14,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    if (isMine)
+                                                      PopupMenuButton<String>(
+                                                        onSelected:
+                                                            (value) async {
+                                                          if (value ==
+                                                              'edit') {
+                                                            final controller =
+                                                                TextEditingController(
+                                                                    text: review
+                                                                        .reviewText);
+                                                            double newRating =
+                                                                review.rating;
+                                                            await showDialog<
+                                                                void>(
+                                                              context: context,
+                                                              builder:
+                                                                  (context) {
+                                                                return StatefulBuilder(
+                                                                  builder:
+                                                                      (context,
+                                                                          setState) {
+                                                                    return AlertDialog(
+                                                                      title: Text(
+                                                                          'Edit review for ${place.placeName}'),
+                                                                      content:
+                                                                          Column(
+                                                                        mainAxisSize:
+                                                                            MainAxisSize
+                                                                                .min,
+                                                                        children: [
+                                                                          Row(
+                                                                            children:
+                                                                                List.generate(
+                                                                              5,
+                                                                              (i) =>
+                                                                                  GestureDetector(
+                                                                                onTap: () =>
+                                                                                    setState(
+                                                                                      () =>
+                                                                                          newRating =
+                                                                                              (i + 1)
+                                                                                                  .toDouble(),
+                                                                                    ),
+                                                                                child:
+                                                                                    Icon(
+                                                                                  Icons
+                                                                                      .star,
+                                                                                  color: i < newRating.toInt()
+                                                                                      ? const Color(0xFFFFCA28)
+                                                                                      : Colors.grey.shade300,
+                                                                                ),
+                                                                              ),
+                                                                            ),
+                                                                          ),
+                                                                          const SizedBox(
+                                                                              height:
+                                                                                  8),
+                                                                          TextField(
+                                                                            controller:
+                                                                                controller,
+                                                                            maxLines:
+                                                                                4,
+                                                                          ),
+                                                                        ],
+                                                                      ),
+                                                                      actions: [
+                                                                        TextButton(
+                                                                          onPressed: () =>
+                                                                              Navigator.pop(
+                                                                                  context),
+                                                                          child: const Text(
+                                                                              'Cancel'),
+                                                                        ),
+                                                                        ElevatedButton(
+                                                                          onPressed:
+                                                                              () async {
+                                                                            await context
+                                                                                .read<PlacesProvider>()
+                                                                                .addOrUpdateReview(
+                                                                                  userId:
+                                                                                      review
+                                                                                          .userId,
+                                                                                  placeId:
+                                                                                      place
+                                                                                          .id,
+                                                                                  userName:
+                                                                                      displayName,
+                                                                                  reviewText:
+                                                                                      controller
+                                                                                          .text,
+                                                                                  rating:
+                                                                                      newRating,
+                                                                                );
+                                                                            Navigator.pop(
+                                                                                context);
+                                                                            Navigator.pop(
+                                                                                context);
+                                                                            _showReviews(
+                                                                                place);
+                                                                          },
+                                                                          child: const Text(
+                                                                              'Save'),
+                                                                        ),
+                                                                      ],
+                                                                    );
+                                                                  },
+                                                                );
+                                                              },
+                                                            );
+                                                          } else if (value ==
+                                                              'delete') {
+                                                            await context
+                                                                .read<
+                                                                    PlacesProvider>()
+                                                                .deleteReview(
+                                                                  placeId:
+                                                                      place.id,
+                                                                  reviewId:
+                                                                      review.id,
+                                                                );
+                                                            Navigator.pop(
+                                                                context);
+                                                            _showReviews(
+                                                                place);
+                                                          }
+                                                        },
+                                                        itemBuilder:
+                                                            (context) => [
+                                                          const PopupMenuItem(
+                                                            value: 'edit',
+                                                            child:
+                                                                Text('Edit'),
+                                                          ),
+                                                          const PopupMenuItem(
+                                                            value: 'delete',
+                                                            child:
+                                                                Text('Delete'),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Row(
+                                                  children: [
+                                                    ...List.generate(
+                                                      5,
+                                                      (i) => Icon(
+                                                        Icons.star,
+                                                        size: 14,
+                                                        color: i <
+                                                                review.rating
+                                                                    .toInt()
+                                                            ? const Color(
+                                                                0xFFFFCA28)
+                                                            : Colors.grey
+                                                                .shade300,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
                                             ),
                                           ),
-                                        ),
-                                        if (isMine)
-                                          PopupMenuButton<String>(
-                                            onSelected: (value) async {
-                                              if (value == 'edit') {
-                                                final controller =
-                                                    TextEditingController(
-                                                        text: review.reviewText);
-                                                double newRating =
-                                                    review.rating;
-                                                await showDialog<void>(
-                                                  context: context,
-                                                  builder: (context) {
-                                                    return StatefulBuilder(
-                                                      builder:
-                                                          (context, setState) {
-                                                        return AlertDialog(
-                                                          title: Text(
-                                                              'Edit review for ${place.placeName}'),
-                                                          content: Column(
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .min,
-                                                            children: [
-                                                              Row(
-                                                                children: List
-                                                                    .generate(
-                                                                  5,
-                                                                  (i) =>
-                                                                      GestureDetector(
-                                                                    onTap: () =>
-                                                                        setState(
-                                                                          () =>
-                                                                              newRating =
-                                                                                  (i + 1)
-                                                                                      .toDouble(),
-                                                                        ),
-                                                                    child: Icon(
-                                                                      Icons.star,
-                                                                      color: i <
-                                                                              newRating
-                                                                                  .toInt()
-                                                                          ? const Color(
-                                                                              0xFFFFCA28)
-                                                                          : Colors
-                                                                              .grey
-                                                                              .shade300,
-                                                                    ),
-                                                                  ),
-                                                                ),
-                                                              ),
-                                                              const SizedBox(
-                                                                  height: 8),
-                                                              TextField(
-                                                                controller:
-                                                                    controller,
-                                                                maxLines: 4,
-                                                              ),
-                                                            ],
-                                                          ),
-                                                          actions: [
-                                                            TextButton(
-                                                              onPressed: () =>
-                                                                  Navigator.pop(
-                                                                      context),
-                                                              child: const Text(
-                                                                  'Cancel'),
-                                                            ),
-                                                            ElevatedButton(
-                                                              onPressed:
-                                                                  () async {
-                                                                await context
-                                                                    .read<
-                                                                        PlacesProvider>()
-                                                                    .addOrUpdateReview(
-                                                                      userId:
-                                                                          review
-                                                                              .userId,
-                                                                      placeId:
-                                                                          place
-                                                                              .id,
-                                                                      userName:
-                                                                          displayName,
-                                                                      reviewText:
-                                                                          controller
-                                                                              .text,
-                                                                      rating:
-                                                                          newRating,
-                                                                    );
-                                                                Navigator.pop(
-                                                                    context);
-                                                                Navigator.pop(
-                                                                    context);
-                                                                _showReviews(
-                                                                    place);
-                                                              },
-                                                              child: const Text(
-                                                                  'Save'),
-                                                            ),
-                                                          ],
-                                                        );
-                                                      },
-                                                    );
-                                                  },
-                                                );
-                                              } else if (value == 'delete') {
-                                                await context
-                                                    .read<PlacesProvider>()
-                                                    .deleteReview(
-                                                      placeId: place.id,
-                                                      reviewId: review.id,
-                                                    );
-                                                Navigator.pop(context);
-                                                _showReviews(place);
-                                              }
-                                            },
-                                            itemBuilder: (context) => [
-                                              const PopupMenuItem(
-                                                value: 'edit',
-                                                child: Text('Edit'),
-                                              ),
-                                              const PopupMenuItem(
-                                                value: 'delete',
-                                                child: Text('Delete'),
-                                              ),
-                                            ],
-                                          ),
-                                      ],
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        review.reviewText,
+                                        style: const TextStyle(
+                                            fontSize: 14, height: 1.5),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          const SizedBox(height: 16),
+                          // Add Review Button
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                final currentUser =
+                                    FirebaseAuth.instance.currentUser;
+                                if (currentUser == null) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content:
+                                          Text('Please log in to add a review'),
                                     ),
-                                    Row(
-                                      children: [
-                                        ...List.generate(
-                                          5,
-                                          (i) => Icon(
-                                            Icons.star,
-                                            size: 12,
-                                            color: i < review.rating.toInt()
-                                                ? const Color(0xFFFFCA28)
-                                                : Colors.grey.shade300,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
+                                  );
+                                  return;
+                                }
+                                Navigator.pop(context);
+                                _showAddReviewDialog(place);
+                              },
+                              icon: const Icon(Icons.add),
+                              label: const Text('Add Your Review'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF143C23),
+                                foregroundColor: Colors.white,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            review.reviewText,
-                            style: const TextStyle(
-                                fontSize: 13, height: 1.35),
+                            ),
                           ),
                         ],
                       ),
-                    );
-                  },
-                ),
-            ],
-          ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         );
       },
     );
@@ -664,6 +738,96 @@ class _MapPageState extends State<MapPage> {
               ],
             );
           },
+        );
+      },
+    );
+  }
+
+  void _showChatDialog(Place place) {
+    final messageController = TextEditingController();
+
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Message about ${place.placeName}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      place.placeName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on,
+                            size: 14, color: Colors.black54),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            place.category,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.black54,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: messageController,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  hintText: 'Ask about this place...',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (messageController.text.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please write a message')),
+                  );
+                  return;
+                }
+                // TODO: Implement chat/message functionality here
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Message sent!')),
+                );
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF143C23),
+              ),
+              child: const Text('Send'),
+            ),
+          ],
         );
       },
     );
@@ -1008,13 +1172,13 @@ class _SelectedPlaceSheetFirebase extends StatefulWidget {
   final Place place;
   final double distanceKm;
   final VoidCallback onReviews;
-  final VoidCallback onAddReview;
+  final VoidCallback onChat;
 
   const _SelectedPlaceSheetFirebase({
     required this.place,
     required this.distanceKm,
     required this.onReviews,
-    required this.onAddReview,
+    required this.onChat,
   });
 
   @override
@@ -1140,44 +1304,36 @@ class _SelectedPlaceSheetFirebaseState
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
                 Row(
                   children: [
+                    // Reviews Button
                     Expanded(
-                      child: SizedBox(
-                        height: 28,
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: _SheetButton(
-                                icon: Icons.rate_review_outlined,
-                                label: 'Reviews',
-                                onTap: widget.onReviews,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: _SheetButton(
-                                icon: Icons.add_comment_outlined,
-                                label: 'Add',
-                                onTap: currentUser != null
-                                    ? widget.onAddReview
-                                    : () {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          const SnackBar(
-                                            content: Text(
-                                                'Please log in to add a review'),
-                                          ),
-                                        );
-                                      },
-                              ),
-                            ),
-                          ],
-                        ),
+                      child: _ActionButton(
+                        icon: Icons.rate_review_outlined,
+                        label: 'Reviews',
+                        onTap: widget.onReviews,
                       ),
                     ),
                     const SizedBox(width: 6),
+                    // Chat Button
+                    Expanded(
+                      child: _ActionButton(
+                        icon: Icons.chat_outlined,
+                        label: 'Chat',
+                        onTap: currentUser != null
+                            ? widget.onChat
+                            : () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Please log in to chat'),
+                                  ),
+                                );
+                              },
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    // Favorite Button
                     GestureDetector(
                       onTap: () async {
                         if (currentUser == null) {
@@ -1200,20 +1356,20 @@ class _SelectedPlaceSheetFirebaseState
                         await _checkFavorited();
                       },
                       child: Container(
-                        width: 28,
-                        height: 28,
+                        height: 36,
+                        width: 36,
                         decoration: BoxDecoration(
                           color: _isFavorited
                               ? const Color(0xFFFF2323)
                               : const Color(0xFFFFC4C9),
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(
-                          _isFavorited ? Icons.bookmark : Icons.bookmark_border,
+                          _isFavorited ? Icons.favorite : Icons.favorite_border,
                           color: _isFavorited
                               ? Colors.white
                               : const Color(0xFFFF6375),
-                          size: 18,
+                          size: 20,
                         ),
                       ),
                     ),
@@ -1228,12 +1384,12 @@ class _SelectedPlaceSheetFirebaseState
   }
 }
 
-class _SheetButton extends StatelessWidget {
+class _ActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
 
-  const _SheetButton({
+  const _ActionButton({
     required this.icon,
     required this.label,
     required this.onTap,
@@ -1244,7 +1400,7 @@ class _SheetButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 28,
+        height: 36,
         padding: const EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
           color: const Color(0xFFE8E8E8),
@@ -1253,7 +1409,7 @@ class _SheetButton extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: Colors.black, size: 14),
+            Icon(icon, color: Colors.black, size: 16),
             const SizedBox(width: 4),
             Flexible(
               child: Text(
