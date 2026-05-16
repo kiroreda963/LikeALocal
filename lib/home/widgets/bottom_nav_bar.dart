@@ -91,23 +91,40 @@ class _NavItem extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: EdgeInsets.symmetric(
+          horizontal: label == 'Map' && isActive ? 15 : 12,
+          vertical: 6,
+        ),
+        decoration: BoxDecoration(
+          color: label == 'Map' && isActive ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: label == 'Map' && isActive
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.10),
+                    blurRadius: 12,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               isActive ? activeIcon : icon,
-              size: 24,
-              color: isActive ? Colors.black : Colors.grey.shade500,
+              size: 25,
+              color: isActive ? Colors.black : Colors.grey.shade700,
             ),
             const SizedBox(height: 2),
             Text(
               label,
               style: TextStyle(
                 fontSize: 11,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                color: isActive ? Colors.black : Colors.grey.shade500,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                color: isActive ? Colors.black : Colors.grey.shade700,
               ),
             ),
           ],
@@ -129,11 +146,17 @@ class _AddButton extends StatelessWidget {
       child: Container(
         width: 52,
         height: 52,
-        decoration: const BoxDecoration(
-          color: Colors.black,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F8F8),
           shape: BoxShape.circle,
+          border: Border.all(color: Colors.black, width: 4),
         ),
-        child: const Icon(Icons.add, color: Colors.white, size: 26),
+        child: const Icon(
+          Icons.add,
+          color: Colors.black,
+          size: 32,
+          weight: 800.0,
+        ),
       ),
     );
   }
