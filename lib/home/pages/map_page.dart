@@ -1189,6 +1189,7 @@ class _SelectedPlaceSheetFirebase extends StatefulWidget {
 class _SelectedPlaceSheetFirebaseState
     extends State<_SelectedPlaceSheetFirebase> {
   bool _isFavorited = false;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -1202,9 +1203,62 @@ class _SelectedPlaceSheetFirebaseState
       final isFavorited = await context
           .read<PlacesProvider>()
           .isFavorited(currentUser.uid, widget.place.id);
-      setState(() => _isFavorited = isFavorited);
-    } else {
-      setState(() => _isFavorited = false);
+      if (mounted) {
+        setState(() => _isFavorited = isFavorited);
+      }
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please log in to add favorites'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      if (_isFavorited) {
+        await context
+            .read<PlacesProvider>()
+            .removeFavorite(currentUser.uid, widget.place.id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Removed from favorites'),
+              duration: Duration(seconds: 1),
+            ),
+          );
+        }
+      } else {
+        await context
+            .read<PlacesProvider>()
+            .addFavorite(currentUser.uid, widget.place.id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Added to favorites'),
+              duration: Duration(seconds: 1),
+            ),
+          );
+        }
+      }
+      await _checkFavorited();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error updating favorite')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -1335,26 +1389,7 @@ class _SelectedPlaceSheetFirebaseState
                     const SizedBox(width: 6),
                     // Favorite Button
                     GestureDetector(
-                      onTap: () async {
-                        if (currentUser == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Please log in to add favorites'),
-                            ),
-                          );
-                          return;
-                        }
-
-                        if (_isFavorited) {
-                          await context.read<PlacesProvider>().removeFavorite(
-                              currentUser.uid, widget.place.id);
-                        } else {
-                          await context
-                              .read<PlacesProvider>()
-                              .addFavorite(currentUser.uid, widget.place.id);
-                        }
-                        await _checkFavorited();
-                      },
+                      onTap: _isLoading ? null : _toggleFavorite,
                       child: Container(
                         height: 36,
                         width: 36,
@@ -1364,13 +1399,26 @@ class _SelectedPlaceSheetFirebaseState
                               : const Color(0xFFFFC4C9),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Icon(
-                          _isFavorited ? Icons.favorite : Icons.favorite_border,
-                          color: _isFavorited
-                              ? Colors.white
-                              : const Color(0xFFFF6375),
-                          size: 20,
-                        ),
+                        child: _isLoading
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
+                                ),
+                              )
+                            : Icon(
+                                _isFavorited
+                                    ? Icons.favorite
+                                    : Icons.favorite_border,
+                                color: _isFavorited
+                                    ? Colors.white
+                                    : const Color(0xFFFF6375),
+                                size: 20,
+                              ),
                       ),
                     ),
                   ],
