@@ -3,8 +3,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:likealocal/home/pages/explore_page.dart';
 import 'package:provider/provider.dart';
 
-import 'firebase_options.dart';
-
 import 'auth/auth_provider.dart';
 import 'auth/pages/auth_page.dart';
 import 'Providers/PlaceProvider.dart';
@@ -17,9 +15,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
+    await Firebase.initializeApp();
 
     print('Firebase initialized successfully');
   } catch (e) {
@@ -53,16 +49,15 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
 
-      initialRoute: '/subscription',
+      initialRoute: '/auth',
 
       routes: {
         '/auth': (context) => const AuthScreen(),
 
         '/home': (context) => const MainHomePage(),
 
-        '/chat': (context) => const InboxScreen(
-              currentUserId: 'OGGRI7AVFca8FbUgogDjPqp0QsD2',
-            ),
+        '/chat': (context) =>
+            const InboxScreen(currentUserId: 'OGGRI7AVFca8FbUgogDjPqp0QsD2'),
 
         '/add-place': (context) => const AddPlacePage(),
 
