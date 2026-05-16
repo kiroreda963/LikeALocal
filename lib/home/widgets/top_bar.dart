@@ -1,4 +1,6 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:likealocal/messaging/pages/inbox_screen.dart';
 
 class TopBar extends StatelessWidget implements PreferredSizeWidget {
   final String userName;
@@ -26,7 +28,18 @@ class TopBar extends StatelessWidget implements PreferredSizeWidget {
         IconButton(
           icon: const Icon(Icons.chat_bubble_outline, color: Colors.black87),
           onPressed: () {
-            Navigator.pushNamed(context, '/chat');
+            final currentUser = FirebaseAuth.instance.currentUser;
+            if (currentUser == null) {
+              return;
+            }
+
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) =>
+                    InboxScreen(currentUserId: currentUser.uid),
+              ),
+            );
           },
         ),
         IconButton(
