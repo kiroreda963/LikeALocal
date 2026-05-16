@@ -3,20 +3,24 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:likealocal/home/pages/explore_page.dart';
 import 'package:provider/provider.dart';
 
+import 'firebase_options.dart';
+
 import 'auth/auth_provider.dart';
 import 'auth/pages/auth_page.dart';
 import 'Providers/PlaceProvider.dart';
 import 'messaging/pages/inbox_screen.dart';
 import 'home/pages/home_page_main.dart';
-
-import './add_place/pages/add_place_page.dart';
-import './subscription/pages/subscription_page.dart';
+import 'add_place/pages/add_place_page.dart';
+import 'subscription/pages/subscription_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
-    await Firebase.initializeApp();
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+
     print('Firebase initialized successfully');
   } catch (e) {
     print('Error initializing Firebase: $e');
@@ -49,7 +53,6 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
 
-      // TEMPORARY FOR TESTING
       initialRoute: '/subscription',
 
       routes: {
@@ -57,8 +60,7 @@ class MyApp extends StatelessWidget {
 
         '/home': (context) => const MainHomePage(),
 
-        '/chat': (context) =>
-            const InboxScreen(
+        '/chat': (context) => const InboxScreen(
               currentUserId: 'OGGRI7AVFca8FbUgogDjPqp0QsD2',
             ),
 

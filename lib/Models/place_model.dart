@@ -1,7 +1,7 @@
 class Place {
   final String id;
   final String placeName;
-  final String author;
+  final String authorId;
   final String priceRange;
   final double longitude;
   final double latitude;
@@ -16,7 +16,7 @@ class Place {
   Place({
     required this.id,
     required this.placeName,
-    required this.author,
+    required this.authorId,
     required this.priceRange,
     required this.longitude,
     required this.latitude,
@@ -34,7 +34,7 @@ class Place {
     return Place(
       id: docId,
       placeName: map['placeName'] ?? '',
-      author: map['author'] ?? '',
+      authorId: map['authorId'] ?? '',
       priceRange: map['priceRange'] ?? '',
       longitude: (map['longitude'] ?? 0).toDouble(),
       latitude: (map['latitude'] ?? 0).toDouble(),
@@ -54,7 +54,7 @@ class Place {
   Map<String, dynamic> toMap() {
     return {
       'placeName': placeName,
-      'author': author,
+      'authorId': authorId,
       'priceRange': priceRange,
       'longitude': longitude,
       'latitude': latitude,
@@ -72,7 +72,7 @@ class Place {
   Place copyWith({
     String? id,
     String? placeName,
-    String? author,
+    String? authorId,
     String? priceRange,
     String? description,
     String? category,
@@ -85,7 +85,7 @@ class Place {
     return Place(
       id: id ?? this.id,
       placeName: placeName ?? this.placeName,
-      author: author ?? this.author,
+      authorId: authorId ?? this.authorId,
       priceRange: priceRange ?? this.priceRange,
       description: description ?? this.description,
       category: category ?? this.category,

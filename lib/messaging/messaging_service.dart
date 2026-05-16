@@ -22,7 +22,9 @@ class MessagingService {
         .orderBy('lastMessageTime', descending: true)
         .snapshots()
         .map(
-          (snap) => snap.docs.map((d) => ConversationModel.fromDoc(d)).toList(),
+          (snap) => snap.docs
+              .map((d) => ConversationModel.fromDoc(d, currentUserId))
+              .toList(),
         );
   }
 
@@ -62,10 +64,52 @@ class MessagingService {
     await batch.commit();
   }
 
+  /// Create or return an existing one-on-one conversation between two users.
+  Future<String> createOrGetConversation({
+    required String currentUserId,
+    required String otherUserId,
+    required String currentUserName,
+    required String otherUserName,
+    String currentUserAvatar = '',
+    String otherUserAvatar = '',
+    bool otherUserOnline = true,
+  }) async {
+    final sortedIds = [currentUserId, otherUserId]..sort();
+    final conversationId = 'chat_${sortedIds.join('_')}';
+    final participants = List<String>.from(sortedIds);
+    final convRef = _conversations.doc(conversationId);
+    final now = Timestamp.now();
+
+    await convRef.set({
+      'participants': participants,
+      'participantId': otherUserId,
+      'participantName': otherUserName,
+      'participantAvatar': otherUserAvatar,
+      'isOnline': otherUserOnline,
+      'userMeta': {
+        currentUserId: {
+          'name': currentUserName,
+          'avatar': currentUserAvatar,
+          'isOnline': false,
+        },
+        otherUserId: {
+          'name': otherUserName,
+          'avatar': otherUserAvatar,
+          'isOnline': otherUserOnline,
+        },
+      },
+      'lastMessage': '',
+      'lastMessageTime': now,
+      'isAI': false,
+    }, SetOptions(merge: true));
+
+    return conversationId;
+  }
+
   // ── AI conversation messages (stored under 'ai_assistant' convo) ──────────
 
   Stream<List<MessageModel>> aiMessagesStream(String userId) {
-    final convId = 'ai_${userId}';
+    final convId = 'ai_$userId';
     return _messages(convId)
         .orderBy('timestamp', descending: false)
         .snapshots()
