@@ -34,8 +34,7 @@ class _HomePageState extends State<HomePage> {
     final placesProvider = Provider.of<PlacesProvider>(context);
     final trendingPlaces = placesProvider.places.map((place) {
       return TrendingPlaceData(
-        imageUrl:
-            "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400",
+        imageUrl: place.imageUrl,
         name: place.placeName,
         location: place.category, // or add real location field later
         distance: '2 km', // placeholder for now (you can calculate later)
@@ -46,8 +45,7 @@ class _HomePageState extends State<HomePage> {
 
     final hiddenGems = placesProvider.hiddenGems.map((place) {
       return HiddenGemData(
-        imageUrl:
-            "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400",
+        imageUrl: place.imageUrl,
         name: place.placeName,
         description: place.description,
         location: place.category, // or add real location field later

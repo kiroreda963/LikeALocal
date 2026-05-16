@@ -10,6 +10,7 @@ import 'messaging/pages/inbox_screen.dart';
 import 'home/pages/home_page_main.dart';
 import '../messaging/messaging_service.dart';
 import './add_place/pages/add_place_page.dart';
+import './home/pages/map_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

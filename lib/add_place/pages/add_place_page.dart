@@ -19,6 +19,7 @@ class AddPlacePage extends StatefulWidget {
 class _AddPlacePageState extends State<AddPlacePage> {
   final TextEditingController placeNameController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
+  final TextEditingController imageUrlController = TextEditingController();
 
   String? selectedCategory;
   String? selectedPriceRange;
@@ -98,6 +99,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
   Future<void> publishPlace() async {
     final placeName = placeNameController.text.trim();
     final description = descriptionController.text.trim();
+    final imageUrlFromInput = imageUrlController.text.trim();
     final currentUser = FirebaseAuth.instance.currentUser;
 
     if (placeName.isEmpty ||
@@ -109,6 +111,15 @@ class _AddPlacePageState extends State<AddPlacePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please fill all fields and choose location'),
+        ),
+      );
+      return;
+    }
+
+    if (selectedImageBytes == null && imageUrlFromInput.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please upload an image or provide an image URL'),
         ),
       );
       return;
@@ -126,9 +137,9 @@ class _AddPlacePageState extends State<AddPlacePage> {
     });
 
     try {
-      String imageUrl = '';
+      String imageUrl = imageUrlFromInput;
 
-      // Upload image if available
+      // Upload image if available (priority over URL)
       if (selectedImageBytes != null && selectedImageName != null) {
         final fileName =
             'places/${DateTime.now().millisecondsSinceEpoch}_$selectedImageName';
@@ -138,25 +149,44 @@ class _AddPlacePageState extends State<AddPlacePage> {
         imageUrl = await ref.getDownloadURL();
       }
 
-      // Get user name
-      final userName = currentUser.displayName ?? 'Anonymous';
+      // Get user name and ID
+      final authorId = currentUser.uid;
 
       // Save place to Firestore
-      await FirebaseFirestore.instance.collection('places').add({
-        'placeName': placeName,
-        'author': userName,
-        'description': description,
-        'category': selectedCategory,
-        'priceRange': selectedPriceRange,
-        'imageUrl': imageUrl,
-        'imageName': selectedImageName,
-        'latitude': latitude,
-        'longitude': longitude,
-        'rating': 0.0,
-        'reviewCount': 0,
-        'favoredByUsers': [],
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      final placeRef = await FirebaseFirestore.instance
+          .collection('places')
+          .add({
+            'placeName': placeName,
+            'authorId': authorId,
+            'description': description,
+            'category': selectedCategory,
+            'priceRange': selectedPriceRange,
+            'imageUrl': imageUrl,
+            'imageName': selectedImageName,
+            'latitude': latitude,
+            'longitude': longitude,
+            'rating': 0.0,
+            'reviewCount': 0,
+            'favoredByUsers': [],
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+
+      // Add place ID to user's addedPlaces array
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(authorId)
+          .update({
+            'addedPlaces': FieldValue.arrayUnion([placeRef.id]),
+          })
+          .catchError((e) {
+            // If user document doesn't exist, create it with addedPlaces
+            return FirebaseFirestore.instance
+                .collection('users')
+                .doc(authorId)
+                .set({
+                  'addedPlaces': [placeRef.id],
+                }, SetOptions(merge: true));
+          });
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Place published successfully')),
@@ -164,6 +194,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
 
       placeNameController.clear();
       descriptionController.clear();
+      imageUrlController.clear();
 
       setState(() {
         selectedCategory = null;
@@ -193,6 +224,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
   void dispose() {
     placeNameController.dispose();
     descriptionController.dispose();
+    imageUrlController.dispose();
     super.dispose();
   }
 
@@ -377,6 +409,23 @@ class _AddPlacePageState extends State<AddPlacePage> {
                     style: const TextStyle(fontSize: 14, color: Colors.grey),
                   ),
                 ],
+
+                const SizedBox(height: 25),
+
+                const Text(
+                  'Image URL (Optional)',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: imageUrlController,
+                  decoration: InputDecoration(
+                    hintText: 'Enter image URL',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
 
                 const SizedBox(height: 25),
 

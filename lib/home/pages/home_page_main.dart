@@ -5,6 +5,7 @@ import '../widgets/bottom_nav_bar.dart';
 import 'home_page.dart';
 import '../../auth/auth_provider.dart';
 import 'package:provider/provider.dart';
+import 'map_page.dart';
 
 class MainHomePage extends StatelessWidget {
   const MainHomePage({super.key});
@@ -30,7 +31,7 @@ class _MainShellState extends State<MainShell> {
   final List<Widget> _pages = const [
     HomePage(),
     ExplorePage(),
-    Center(child: Text('Map')),
+    MapPage(),
     Center(child: Text('Profile')),
   ];
 
