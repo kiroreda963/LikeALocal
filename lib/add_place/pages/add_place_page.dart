@@ -2,6 +2,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -96,6 +98,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
   Future<void> publishPlace() async {
     final placeName = placeNameController.text.trim();
     final description = descriptionController.text.trim();
+    final currentUser = FirebaseAuth.instance.currentUser;
 
     if (placeName.isEmpty ||
         description.isEmpty ||
@@ -111,19 +114,47 @@ class _AddPlacePageState extends State<AddPlacePage> {
       return;
     }
 
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in to add a place')),
+      );
+      return;
+    }
+
     setState(() {
       isLoading = true;
     });
 
     try {
+      String imageUrl = '';
+
+      // Upload image if available
+      if (selectedImageBytes != null && selectedImageName != null) {
+        final fileName =
+            'places/${DateTime.now().millisecondsSinceEpoch}_$selectedImageName';
+        final ref = FirebaseStorage.instance.ref().child(fileName);
+
+        await ref.putData(selectedImageBytes!);
+        imageUrl = await ref.getDownloadURL();
+      }
+
+      // Get user name
+      final userName = currentUser.displayName ?? 'Anonymous';
+
+      // Save place to Firestore
       await FirebaseFirestore.instance.collection('places').add({
         'placeName': placeName,
+        'author': userName,
         'description': description,
         'category': selectedCategory,
         'priceRange': selectedPriceRange,
+        'imageUrl': imageUrl,
         'imageName': selectedImageName,
         'latitude': latitude,
         'longitude': longitude,
+        'rating': 0.0,
+        'reviewCount': 0,
+        'favoredByUsers': [],
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -142,6 +173,11 @@ class _AddPlacePageState extends State<AddPlacePage> {
         latitude = null;
         longitude = null;
       });
+
+      // Navigate back after successful publish
+      if (mounted) {
+        Navigator.pop(context);
+      }
     } catch (e) {
       ScaffoldMessenger.of(
         context,

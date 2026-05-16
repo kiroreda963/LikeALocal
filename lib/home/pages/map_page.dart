@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../../Providers/PlaceProvider.dart';
+import '../../../Models/place_model.dart';
+import '../../../services/place_service.dart';
 
 class MapTopBar extends StatelessWidget implements PreferredSizeWidget {
   const MapTopBar({super.key});
@@ -53,81 +58,18 @@ class _MapPageState extends State<MapPage> {
 
   static const LatLng _newCairo = LatLng(30.0074, 31.4913);
 
-  final List<HiddenGemPlace> _places = const [
-    HiddenGemPlace(
-      name: 'Arcade Hub',
-      category: PlaceCategory.hiddenGems,
-      position: LatLng(30.0091, 31.4936),
-      rating: 4.8,
-      owner: 'Mina',
-      imageUrl:
-          'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=300',
-      reviews: [
-        'Small, colorful arcade with rare machines and friendly staff.',
-        'Great for a quick hangout after coffee nearby.',
-        'The owner keeps the machines in surprisingly good shape.',
-      ],
-    ),
-    HiddenGemPlace(
-      name: 'Smart Gym',
-      category: PlaceCategory.hiddenGems,
-      position: LatLng(30.0121, 31.4962),
-      rating: 4.2,
-      owner: 'Omar',
-      imageUrl:
-          'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=300',
-      reviews: [
-        'Quiet in the morning and has all the essentials.',
-        'Good coaches, no tourist crowd.',
-      ],
-    ),
-    HiddenGemPlace(
-      name: 'Asian County',
-      category: PlaceCategory.foodAndDrink,
-      position: LatLng(30.0045, 31.4889),
-      rating: 4.9,
-      owner: 'Nour',
-      imageUrl:
-          'https://images.unsplash.com/photo-1553621042-f6e147245754?w=300',
-      reviews: [
-        'Tiny spot, huge portions, excellent noodles.',
-        'Feels like the kind of place locals keep to themselves.',
-      ],
-    ),
-    HiddenGemPlace(
-      name: 'Garden 8 Walk',
-      category: PlaceCategory.touristAreas,
-      position: LatLng(30.0118, 31.4881),
-      rating: 4.5,
-      owner: 'LikeALocal',
-      imageUrl:
-          'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=300',
-      reviews: ['Easy walk, lots of food nearby, good evening atmosphere.'],
-    ),
-  ];
-
-  PlaceCategory? _selectedCategory;
-  HiddenGemPlace? _selectedPlace;
+  Place? _selectedPlace;
   LatLng? _myLocation;
   String _query = '';
-
-  List<HiddenGemPlace> get _filteredPlaces {
-    return _places.where((place) {
-      final matchesCategory =
-          _selectedCategory == null || place.category == _selectedCategory;
-      final matchesQuery =
-          _query.isEmpty ||
-          place.name.toLowerCase().contains(_query.toLowerCase()) ||
-          place.category.label.toLowerCase().contains(_query.toLowerCase());
-      return matchesCategory && matchesQuery;
-    }).toList();
-  }
+  String? _selectedCategoryFilter;
 
   @override
   void initState() {
     super.initState();
-    _selectedPlace = _places.first;
     _loadCurrentLocation();
+    Future.microtask(() {
+      context.read<PlacesProvider>().fetchPlaces();
+    });
   }
 
   @override
@@ -139,7 +81,14 @@ class _MapPageState extends State<MapPage> {
   Future<void> _loadCurrentLocation() async {
     try {
       final enabled = await Geolocator.isLocationServiceEnabled();
-      if (!enabled) return;
+      if (!enabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please enable location services')),
+          );
+        }
+        return;
+      }
 
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
@@ -147,172 +96,237 @@ class _MapPageState extends State<MapPage> {
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Location permission is required for better experience'),
+            ),
+          );
+        }
         return;
       }
 
-      final position = await Geolocator.getCurrentPosition();
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.best,
+          distanceFilter: 10,
+        ),
+      );
+
       if (!mounted) return;
+
       setState(() {
         _myLocation = LatLng(position.latitude, position.longitude);
       });
-    } catch (_) {
-      // The map remains useful even if location is unavailable.
+
+      _mapController.move(_myLocation!, 15.5);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not get your location')),
+        );
+      }
     }
   }
 
-  void _selectPlace(HiddenGemPlace place) {
+  void _selectPlace(Place place) {
     setState(() => _selectedPlace = place);
-    _mapController.move(place.position, 15.6);
+    _mapController.move(LatLng(place.latitude, place.longitude), 15.6);
   }
 
-  double _distanceKm(HiddenGemPlace place) {
+  double _distanceKm(Place place) {
     final origin = _myLocation ?? _newCairo;
-    return Geolocator.distanceBetween(
-          origin.latitude,
-          origin.longitude,
-          place.position.latitude,
-          place.position.longitude,
-        ) /
-        1000;
+    final placeLatLng = LatLng(place.latitude, place.longitude);
+    return PlaceService.calculateDistance(origin, placeLatLng);
   }
 
   @override
   Widget build(BuildContext context) {
-    final selectedPlace = _selectedPlace;
+    return Consumer<PlacesProvider>(
+      builder: (context, placesProvider, _) {
+        final places = placesProvider.places;
 
-    return Stack(
-      children: [
-        FlutterMap(
-          mapController: _mapController,
-          options: MapOptions(
-            initialCenter: selectedPlace?.position ?? _newCairo,
-            initialZoom: 15.2,
-            interactionOptions: const InteractionOptions(
-              flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-            ),
-          ),
-          children: [
-            TileLayer(
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'com.example.likealocal',
-              tileBuilder: (context, tileWidget, tile) {
-                return ColorFiltered(
-                  colorFilter: const ColorFilter.matrix([
-                    0.62,
-                    0.12,
-                    0.06,
-                    0,
-                    70,
-                    0.08,
-                    1.08,
-                    0.08,
-                    0,
-                    52,
-                    0.04,
-                    0.12,
-                    0.68,
-                    0,
-                    70,
-                    0,
-                    0,
-                    0,
-                    1,
-                    0,
-                  ]),
-                  child: tileWidget,
-                );
-              },
-            ),
-            MarkerLayer(
-              markers: [
-                if (_myLocation != null)
-                  Marker(
-                    point: _myLocation!,
-                    width: 24,
-                    height: 24,
-                    child: const _CurrentLocationMarker(),
-                  ),
-                ..._filteredPlaces.map(
-                  (place) => Marker(
-                    point: place.position,
-                    width: 155,
-                    height: 56,
-                    alignment: Alignment.centerLeft,
-                    child: _PlaceMarker(
-                      place: place,
-                      selected: place == selectedPlace,
-                      onTap: () => _selectPlace(place),
-                    ),
+        final filteredPlaces = places.where((place) {
+          final matchesQuery = _query.isEmpty ||
+              place.placeName.toLowerCase().contains(_query.toLowerCase()) ||
+              place.category.toLowerCase().contains(_query.toLowerCase());
+          final matchesCategory = _selectedCategoryFilter == null ||
+              place.category.toLowerCase() ==
+                  _selectedCategoryFilter?.toLowerCase();
+          return matchesQuery && matchesCategory;
+        }).toList();
+
+        final selectedPlace = _selectedPlace;
+
+        return Scaffold(
+          body: Stack(
+            children: [
+              // Map layer
+              FlutterMap(
+                mapController: _mapController,
+                options: MapOptions(
+                  initialCenter: selectedPlace != null
+                      ? LatLng(selectedPlace.latitude, selectedPlace.longitude)
+                      : _newCairo,
+                  initialZoom: 15.2,
+                  interactionOptions: const InteractionOptions(
+                    flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                   ),
                 ),
-              ],
-            ),
-          ],
-        ),
-        SafeArea(
-          bottom: false,
-          child: Column(
-            children: [
-              const SizedBox(height: 8),
-              _MapSearchBar(
-                controller: _searchController,
-                onChanged: (value) => setState(() => _query = value),
-                onClear: () {
-                  _searchController.clear();
-                  setState(() => _query = '');
-                },
-              ),
-              const SizedBox(height: 14),
-              _CategoryFilters(
-                selected: _selectedCategory,
-                onSelected: (category) {
-                  setState(() {
-                    _selectedCategory = _selectedCategory == category
-                        ? null
-                        : category;
-                    final visible = _filteredPlaces;
-                    if (visible.isNotEmpty) {
-                      _selectedPlace = visible.first;
-                    }
-                  });
-                  final place = _filteredPlaces.firstOrNull;
-                  if (place != null) _selectPlace(place);
-                },
-              ),
-              if (_query.isNotEmpty)
-                _SearchResults(places: _filteredPlaces, onTap: _selectPlace),
-              const Spacer(),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 24, bottom: 12),
-                  child: _MapControlButton(
-                    icon: Icons.my_location,
-                    onPressed: () {
-                      final target = _myLocation ?? _newCairo;
-                      _mapController.move(target, 15.5);
+                children: [
+                  TileLayer(
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.example.likealocal',
+                    tileBuilder: (context, tileWidget, tile) {
+                      return ColorFiltered(
+                        colorFilter: const ColorFilter.matrix([
+                          0.62,
+                          0.12,
+                          0.06,
+                          0,
+                          70,
+                          0.08,
+                          1.08,
+                          0.08,
+                          0,
+                          52,
+                          0.04,
+                          0.12,
+                          0.68,
+                          0,
+                          70,
+                          0,
+                          0,
+                          0,
+                          1,
+                          0,
+                        ]),
+                        child: tileWidget,
+                      );
                     },
                   ),
+                  MarkerLayer(
+                    markers: [
+                      if (_myLocation != null)
+                        Marker(
+                          point: _myLocation!,
+                          width: 24,
+                          height: 24,
+                          child: const _CurrentLocationMarker(),
+                        ),
+                      ...filteredPlaces.map(
+                        (place) {
+                          final placeLatLng =
+                              LatLng(place.latitude, place.longitude);
+                          return Marker(
+                            point: placeLatLng,
+                            width: 155,
+                            height: 56,
+                            alignment: Alignment.centerLeft,
+                            child: _PlaceMarkerFirebase(
+                              place: place,
+                              selected: place.id == selectedPlace?.id,
+                              onTap: () => _selectPlace(place),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+
+              // Top UI Controls
+              SafeArea(
+                bottom: false,
+                child: Column(
+                  children: [
+                    const SizedBox(height: 12),
+                    // Search Bar
+                    _MapSearchBar(
+                      controller: _searchController,
+                      onChanged: (value) => setState(() => _query = value),
+                      onClear: () {
+                        _searchController.clear();
+                        setState(() => _query = '');
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    // Category Filters
+                    _CategoryFiltersFirebase(
+                      selected: _selectedCategoryFilter,
+                      onSelected: (category) {
+                        setState(() {
+                          _selectedCategoryFilter =
+                              _selectedCategoryFilter == category
+                                  ? null
+                                  : category;
+                          final visible = filteredPlaces;
+                          if (visible.isNotEmpty) {
+                            _selectPlace(visible.first);
+                          }
+                        });
+                      },
+                    ),
+                    // Search Results
+                    if (_query.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: _SearchResultsFirebase(
+                          places: filteredPlaces,
+                          onTap: _selectPlace,
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              if (selectedPlace != null)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(48, 0, 48, 30),
-                  child: _SelectedPlaceSheet(
-                    place: selectedPlace,
-                    distanceKm: _distanceKm(selectedPlace),
-                    onReviews: () => _showReviews(selectedPlace),
-                    onChat: () => _openChat(selectedPlace),
-                  ),
+
+              // Bottom Controls
+              SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 24, bottom: 12),
+                        child: _MapControlButton(
+                          icon: Icons.my_location,
+                          onPressed: () {
+                            final target = _myLocation ?? _newCairo;
+                            _mapController.move(target, 15.5);
+                          },
+                        ),
+                      ),
+                    ),
+                    if (selectedPlace != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                        child: _SelectedPlaceSheetFirebase(
+                          place: selectedPlace,
+                          distanceKm: _distanceKm(selectedPlace),
+                          onReviews: () => _showReviews(selectedPlace),
+                          onAddReview: () =>
+                              _showAddReviewDialog(selectedPlace),
+                        ),
+                      ),
+                  ],
                 ),
+              ),
             ],
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 
-  void _showReviews(HiddenGemPlace place) {
+  void _showReviews(Place place) async {
+    final reviews =
+        await context.read<PlacesProvider>().fetchReviews(place.id);
+    if (!mounted) return;
+
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -330,7 +344,7 @@ class _MapPageState extends State<MapPage> {
                 children: [
                   Expanded(
                     child: Text(
-                      '${place.name} Reviews',
+                      '${place.placeName} Reviews',
                       style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w900,
@@ -345,24 +359,209 @@ class _MapPageState extends State<MapPage> {
                 ],
               ),
               const SizedBox(height: 12),
-              ...place.reviews.map(
-                (review) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.chat_bubble_outline, size: 18),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          review,
-                          style: const TextStyle(fontSize: 14, height: 1.35),
-                        ),
+              if (reviews.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Text('No reviews yet. Be the first to review!'),
+                )
+              else
+                ...reviews.map(
+                  (review) {
+                    final currentUser = FirebaseAuth.instance.currentUser;
+                    final isMine =
+                        currentUser != null && review.userId == currentUser.uid;
+                    final displayName = review.userName.isNotEmpty
+                        ? review.userName
+                        : 'Anonymous';
+                    final avatarLetter = displayName.isNotEmpty
+                        ? displayName[0].toUpperCase()
+                        : '?';
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 14,
+                                child: Text(avatarLetter),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            displayName,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                        if (isMine)
+                                          PopupMenuButton<String>(
+                                            onSelected: (value) async {
+                                              if (value == 'edit') {
+                                                final controller =
+                                                    TextEditingController(
+                                                        text: review.reviewText);
+                                                double newRating =
+                                                    review.rating;
+                                                await showDialog<void>(
+                                                  context: context,
+                                                  builder: (context) {
+                                                    return StatefulBuilder(
+                                                      builder:
+                                                          (context, setState) {
+                                                        return AlertDialog(
+                                                          title: Text(
+                                                              'Edit review for ${place.placeName}'),
+                                                          content: Column(
+                                                            mainAxisSize:
+                                                                MainAxisSize
+                                                                    .min,
+                                                            children: [
+                                                              Row(
+                                                                children: List
+                                                                    .generate(
+                                                                  5,
+                                                                  (i) =>
+                                                                      GestureDetector(
+                                                                    onTap: () =>
+                                                                        setState(
+                                                                          () =>
+                                                                              newRating =
+                                                                                  (i + 1)
+                                                                                      .toDouble(),
+                                                                        ),
+                                                                    child: Icon(
+                                                                      Icons.star,
+                                                                      color: i <
+                                                                              newRating
+                                                                                  .toInt()
+                                                                          ? const Color(
+                                                                              0xFFFFCA28)
+                                                                          : Colors
+                                                                              .grey
+                                                                              .shade300,
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                              const SizedBox(
+                                                                  height: 8),
+                                                              TextField(
+                                                                controller:
+                                                                    controller,
+                                                                maxLines: 4,
+                                                              ),
+                                                            ],
+                                                          ),
+                                                          actions: [
+                                                            TextButton(
+                                                              onPressed: () =>
+                                                                  Navigator.pop(
+                                                                      context),
+                                                              child: const Text(
+                                                                  'Cancel'),
+                                                            ),
+                                                            ElevatedButton(
+                                                              onPressed:
+                                                                  () async {
+                                                                await context
+                                                                    .read<
+                                                                        PlacesProvider>()
+                                                                    .addOrUpdateReview(
+                                                                      userId:
+                                                                          review
+                                                                              .userId,
+                                                                      placeId:
+                                                                          place
+                                                                              .id,
+                                                                      userName:
+                                                                          displayName,
+                                                                      reviewText:
+                                                                          controller
+                                                                              .text,
+                                                                      rating:
+                                                                          newRating,
+                                                                    );
+                                                                Navigator.pop(
+                                                                    context);
+                                                                Navigator.pop(
+                                                                    context);
+                                                                _showReviews(
+                                                                    place);
+                                                              },
+                                                              child: const Text(
+                                                                  'Save'),
+                                                            ),
+                                                          ],
+                                                        );
+                                                      },
+                                                    );
+                                                  },
+                                                );
+                                              } else if (value == 'delete') {
+                                                await context
+                                                    .read<PlacesProvider>()
+                                                    .deleteReview(
+                                                      placeId: place.id,
+                                                      reviewId: review.id,
+                                                    );
+                                                Navigator.pop(context);
+                                                _showReviews(place);
+                                              }
+                                            },
+                                            itemBuilder: (context) => [
+                                              const PopupMenuItem(
+                                                value: 'edit',
+                                                child: Text('Edit'),
+                                              ),
+                                              const PopupMenuItem(
+                                                value: 'delete',
+                                                child: Text('Delete'),
+                                              ),
+                                            ],
+                                          ),
+                                      ],
+                                    ),
+                                    Row(
+                                      children: [
+                                        ...List.generate(
+                                          5,
+                                          (i) => Icon(
+                                            Icons.star,
+                                            size: 12,
+                                            color: i < review.rating.toInt()
+                                                ? const Color(0xFFFFCA28)
+                                                : Colors.grey.shade300,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            review.reviewText,
+                            style: const TextStyle(
+                                fontSize: 13, height: 1.35),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
-              ),
             ],
           ),
         );
@@ -370,9 +569,103 @@ class _MapPageState extends State<MapPage> {
     );
   }
 
-  void _openChat(HiddenGemPlace place) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Opening chat with ${place.owner}...')),
+  void _showAddReviewDialog(Place place) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in to add a review')),
+      );
+      return;
+    }
+
+    final reviewController = TextEditingController();
+    double rating = 4.0;
+
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text('Review ${place.placeName}'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Rating:'),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        ...List.generate(
+                          5,
+                          (i) => GestureDetector(
+                            onTap: () =>
+                                setState(() => rating = (i + 1).toDouble()),
+                            child: Icon(
+                              Icons.star,
+                              color: i < rating.toInt()
+                                  ? const Color(0xFFFFCA28)
+                                  : Colors.grey.shade300,
+                              size: 30,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Your Review:'),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: reviewController,
+                      maxLines: 4,
+                      decoration: InputDecoration(
+                        hintText: 'Share your experience...',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (reviewController.text.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text('Please write a review')),
+                      );
+                      return;
+                    }
+
+                    await context.read<PlacesProvider>().addOrUpdateReview(
+                      userId: currentUser.uid,
+                      placeId: place.id,
+                      userName: currentUser.displayName ?? 'Anonymous',
+                      reviewText: reviewController.text,
+                      rating: rating,
+                    );
+
+                    if (mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Review submitted')),
+                      );
+                    }
+                  },
+                  child: const Text('Submit'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -392,21 +685,21 @@ class _MapSearchBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: SizedBox(
-        width: 220,
-        height: 34,
+        width: 260,
+        height: 40,
         child: TextField(
           controller: controller,
           onChanged: onChanged,
           textInputAction: TextInputAction.search,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
           decoration: InputDecoration(
             filled: true,
-            fillColor: Colors.white.withValues(alpha: 0.94),
-            hintText: 'SEARCH',
+            fillColor: Colors.white,
+            hintText: 'Search places...',
             hintStyle: TextStyle(
               color: Colors.grey.shade400,
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
             ),
             prefixIcon: Icon(Icons.search, color: Colors.grey.shade400),
             suffixIcon: controller.text.isEmpty
@@ -415,10 +708,28 @@ class _MapSearchBar extends StatelessWidget {
                     icon: Icon(Icons.close, color: Colors.grey.shade500),
                     onPressed: onClear,
                   ),
-            contentPadding: EdgeInsets.zero,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(
+                color: Colors.grey.shade300,
+                width: 1,
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(
+                color: Colors.grey.shade300,
+                width: 1,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(
+                color: Color(0xFF143C23),
+                width: 2,
+              ),
             ),
           ),
         ),
@@ -427,111 +738,183 @@ class _MapSearchBar extends StatelessWidget {
   }
 }
 
-class _CategoryFilters extends StatelessWidget {
-  final PlaceCategory? selected;
-  final ValueChanged<PlaceCategory> onSelected;
+class _CategoryFiltersFirebase extends StatelessWidget {
+  final String? selected;
+  final ValueChanged<String> onSelected;
 
-  const _CategoryFilters({required this.selected, required this.onSelected});
+  const _CategoryFiltersFirebase({
+    required this.selected,
+    required this.onSelected,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: PlaceCategory.values.map((category) {
-        final active = selected == category;
-        return GestureDetector(
-          onTap: () => onSelected(category),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            height: 29,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: active ? Colors.black : Colors.white,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Text(
-              category.label.toUpperCase(),
-              style: TextStyle(
-                color: active ? Colors.white : Colors.black,
-                fontSize: 11,
-                fontWeight: FontWeight.w900,
+    final categories = ['Food', 'Gym', 'Tourist', 'Hidden Gems'];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: List.generate(categories.length, (index) {
+          final category = categories[index];
+          final active = selected == category;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: GestureDetector(
+              onTap: () => onSelected(category),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                height: 34,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: active ? const Color(0xFF143C23) : Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: active
+                        ? const Color(0xFF143C23)
+                        : Colors.grey.shade300,
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  category.toUpperCase(),
+                  style: TextStyle(
+                    color: active ? Colors.white : Colors.black87,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ),
-          ),
-        );
-      }).toList(),
+          );
+        }),
+      ),
     );
   }
 }
 
-class _SearchResults extends StatelessWidget {
-  final List<HiddenGemPlace> places;
-  final ValueChanged<HiddenGemPlace> onTap;
+class _SearchResultsFirebase extends StatelessWidget {
+  final List<Place> places;
+  final ValueChanged<Place> onTap;
 
-  const _SearchResults({required this.places, required this.onTap});
+  const _SearchResultsFirebase({
+    required this.places,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.topCenter,
+    return Center(
       child: Container(
-        width: 260,
-        margin: const EdgeInsets.only(top: 10),
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        width: 280,
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.35,
+        ),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.12),
-              blurRadius: 14,
-              offset: const Offset(0, 6),
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
             ),
           ],
         ),
         child: places.isEmpty
             ? const Padding(
-                padding: EdgeInsets.all(12),
-                child: Text('No hidden gems found'),
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'No places found',
+                  style: TextStyle(
+                    color: Colors.black54,
+                    fontSize: 14,
+                  ),
+                ),
               )
-            : Column(
-                mainAxisSize: MainAxisSize.min,
-                children: places.map((place) {
+            : ListView.builder(
+                padding: EdgeInsets.zero,
+                itemCount: places.length,
+                itemBuilder: (context, index) {
+                  final place = places[index];
                   return ListTile(
-                    dense: true,
-                    leading: Icon(place.icon, color: const Color(0xFF143C23)),
-                    title: Text(
-                      place.name,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    dense: false,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    leading: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF143C23).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        PlaceService.getIconByName(place.placeName),
+                        color: const Color(0xFF143C23),
+                        size: 18,
+                      ),
                     ),
-                    subtitle: Text(place.category.label),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.star,
-                          color: Color(0xFFFFCA28),
-                          size: 16,
-                        ),
-                        Text(place.rating.toStringAsFixed(1)),
-                      ],
+                    title: Text(
+                      place.placeName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                    subtitle: Text(
+                      place.category,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Colors.black54,
+                      ),
+                    ),
+                    trailing: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE7FF00),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.star,
+                              color: Colors.black, size: 12),
+                          const SizedBox(width: 2),
+                          Text(
+                            place.rating.toStringAsFixed(1),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     onTap: () => onTap(place),
                   );
-                }).toList(),
+                },
               ),
       ),
     );
   }
 }
 
-class _PlaceMarker extends StatelessWidget {
-  final HiddenGemPlace place;
+class _PlaceMarkerFirebase extends StatelessWidget {
+  final Place place;
   final bool selected;
   final VoidCallback onTap;
 
-  const _PlaceMarker({
+  const _PlaceMarkerFirebase({
     required this.place,
     required this.selected,
     required this.onTap,
@@ -539,7 +922,8 @@ class _PlaceMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isMine = place.owner == 'You';
+    final icon = PlaceService.getIconByName(place.placeName);
+
     return GestureDetector(
       onTap: onTap,
       child: Row(
@@ -549,7 +933,7 @@ class _PlaceMarker extends StatelessWidget {
             width: selected ? 46 : 42,
             height: selected ? 46 : 42,
             decoration: BoxDecoration(
-              color: isMine ? const Color(0xFFFF2323) : const Color(0xFF143C23),
+              color: const Color(0xFF143C23),
               shape: BoxShape.circle,
               border: Border.all(color: Colors.white, width: 2),
               boxShadow: [
@@ -560,7 +944,7 @@ class _PlaceMarker extends StatelessWidget {
                 ),
               ],
             ),
-            child: Icon(place.icon, color: Colors.white, size: 24),
+            child: Icon(icon, color: Colors.white, size: 24),
           ),
           if (selected)
             Transform.translate(
@@ -575,12 +959,15 @@ class _PlaceMarker extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      place.name,
-                      style: const TextStyle(
-                        color: Color(0xFF219357),
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
+                    Flexible(
+                      child: Text(
+                        place.placeName,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF219357),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -617,30 +1004,58 @@ class _PlaceMarker extends StatelessWidget {
   }
 }
 
-class _SelectedPlaceSheet extends StatelessWidget {
-  final HiddenGemPlace place;
+class _SelectedPlaceSheetFirebase extends StatefulWidget {
+  final Place place;
   final double distanceKm;
   final VoidCallback onReviews;
-  final VoidCallback onChat;
+  final VoidCallback onAddReview;
 
-  const _SelectedPlaceSheet({
+  const _SelectedPlaceSheetFirebase({
     required this.place,
     required this.distanceKm,
     required this.onReviews,
-    required this.onChat,
+    required this.onAddReview,
   });
 
   @override
+  State<_SelectedPlaceSheetFirebase> createState() =>
+      _SelectedPlaceSheetFirebaseState();
+}
+
+class _SelectedPlaceSheetFirebaseState
+    extends State<_SelectedPlaceSheetFirebase> {
+  bool _isFavorited = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkFavorited();
+  }
+
+  Future<void> _checkFavorited() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      final isFavorited = await context
+          .read<PlacesProvider>()
+          .isFavorited(currentUser.uid, widget.place.id);
+      setState(() => _isFavorited = isFavorited);
+    } else {
+      setState(() => _isFavorited = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+
     return Container(
-      height: 108,
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.11),
+            color: Colors.black.withValues(alpha: 0.12),
             blurRadius: 20,
             offset: const Offset(0, 9),
           ),
@@ -656,85 +1071,150 @@ class _SelectedPlaceSheet extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.network(
-                    place.imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      color: const Color(0xFFEDEDED),
-                      child: Icon(place.icon, color: Colors.black54),
-                    ),
-                  ),
+                  widget.place.imageUrl.isNotEmpty
+                      ? Image.network(
+                          widget.place.imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              Container(
+                            color: const Color(0xFFEDEDED),
+                            child: Icon(
+                              PlaceService.getIconByName(widget.place.placeName),
+                              color: Colors.black54,
+                            ),
+                          ),
+                        )
+                      : Container(
+                          color: const Color(0xFFEDEDED),
+                          child: Icon(
+                            PlaceService.getIconByName(widget.place.placeName),
+                            color: Colors.black54,
+                          ),
+                        ),
                   const Positioned(left: 2, top: 4, child: _TopRatedBadge()),
                 ],
               ),
             ),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
                   children: [
                     Expanded(
                       child: Text(
-                        place.name,
+                        widget.place.placeName,
                         overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                         style: const TextStyle(
                           color: Colors.black,
-                          fontSize: 21,
+                          fontSize: 16,
                           fontWeight: FontWeight.w900,
                           height: 1,
                         ),
                       ),
                     ),
-                    const Icon(Icons.star, color: Color(0xFFFFCA28), size: 18),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.star, color: Color(0xFFFFCA28), size: 16),
                     Text(
-                      place.rating.toStringAsFixed(1),
+                      widget.place.rating.toStringAsFixed(1),
                       style: const TextStyle(
                         color: Colors.black,
-                        fontSize: 12,
+                        fontSize: 11,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 7),
+                const SizedBox(height: 4),
                 Text(
-                  '${distanceKm.toStringAsFixed(1)} KM away - New Cairo',
+                  '${widget.distanceKm.toStringAsFixed(1)} KM - ${widget.place.category}',
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                   style: const TextStyle(
-                    color: Colors.black,
-                    fontSize: 14,
+                    color: Colors.black87,
+                    fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 9),
+                const SizedBox(height: 8),
                 Row(
                   children: [
-                    _SheetButton(
-                      icon: Icons.rate_review_outlined,
-                      label: 'Reviews',
-                      onTap: onReviews,
+                    Expanded(
+                      child: SizedBox(
+                        height: 28,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _SheetButton(
+                                icon: Icons.rate_review_outlined,
+                                label: 'Reviews',
+                                onTap: widget.onReviews,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: _SheetButton(
+                                icon: Icons.add_comment_outlined,
+                                label: 'Add',
+                                onTap: currentUser != null
+                                    ? widget.onAddReview
+                                    : () {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                                'Please log in to add a review'),
+                                          ),
+                                        );
+                                      },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 6),
-                    _SheetButton(
-                      icon: Icons.chat_bubble_outline,
-                      label: 'Chat',
-                      onTap: onChat,
-                    ),
-                    const Spacer(),
-                    Container(
-                      width: 31,
-                      height: 31,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFC4C9),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.bookmark_border,
-                        color: Color(0xFFFF6375),
-                        size: 23,
+                    GestureDetector(
+                      onTap: () async {
+                        if (currentUser == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Please log in to add favorites'),
+                            ),
+                          );
+                          return;
+                        }
+
+                        if (_isFavorited) {
+                          await context.read<PlacesProvider>().removeFavorite(
+                              currentUser.uid, widget.place.id);
+                        } else {
+                          await context
+                              .read<PlacesProvider>()
+                              .addFavorite(currentUser.uid, widget.place.id);
+                        }
+                        await _checkFavorited();
+                      },
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: _isFavorited
+                              ? const Color(0xFFFF2323)
+                              : const Color(0xFFFFC4C9),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Icon(
+                          _isFavorited ? Icons.bookmark : Icons.bookmark_border,
+                          color: _isFavorited
+                              ? Colors.white
+                              : const Color(0xFFFF6375),
+                          size: 18,
+                        ),
                       ),
                     ),
                   ],
@@ -764,22 +1244,26 @@ class _SheetButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 29,
+        height: 28,
         padding: const EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
           color: const Color(0xFFE8E8E8),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: Colors.black, size: 17),
+            Icon(icon, color: Colors.black, size: 14),
             const SizedBox(width: 4),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.black,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.black,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],
@@ -864,45 +1348,4 @@ class _CurrentLocationMarker extends StatelessWidget {
       ),
     );
   }
-}
-
-enum PlaceCategory {
-  hiddenGems('Hidden Gems', Icons.diamond_outlined),
-  foodAndDrink('Food & Drink', Icons.restaurant),
-  touristAreas('Tourist Areas', Icons.map_outlined);
-
-  final String label;
-  final IconData icon;
-
-  const PlaceCategory(this.label, this.icon);
-}
-
-class HiddenGemPlace {
-  final String name;
-  final PlaceCategory category;
-  final LatLng position;
-  final double rating;
-  final String owner;
-  final String imageUrl;
-  final List<String> reviews;
-
-  const HiddenGemPlace({
-    required this.name,
-    required this.category,
-    required this.position,
-    required this.rating,
-    required this.owner,
-    required this.imageUrl,
-    required this.reviews,
-  });
-
-  IconData get icon {
-    if (name.toLowerCase().contains('gym')) return Icons.fitness_center;
-    if (name.toLowerCase().contains('arcade')) return Icons.sports_esports;
-    return category.icon;
-  }
-}
-
-extension _FirstOrNull<T> on List<T> {
-  T? get firstOrNull => isEmpty ? null : first;
 }
