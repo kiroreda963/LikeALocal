@@ -39,7 +39,14 @@ class AuthProvider with ChangeNotifier {
       await FirebaseFirestore.instance
           .collection('users')
           .doc(_auth.currentUser!.uid)
-          .set({'email': email, 'name': name, 'phoneNumber': phoneNumber});
+          .set({
+            'email': email,
+            'name': name,
+            'phoneNumber': phoneNumber,
+            'isPremium': false,
+            'favoredPlaces': [],
+            'addedPlaces': [],
+          });
 
       return null; // success
     } on FirebaseAuthException catch (e) {
