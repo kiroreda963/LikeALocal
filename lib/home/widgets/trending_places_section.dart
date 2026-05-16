@@ -4,10 +4,7 @@ import 'trending_place_card.dart';
 class TrendingPlacesSection extends StatelessWidget {
   final List<TrendingPlaceData> places;
 
-  const TrendingPlacesSection({
-    super.key,
-    required this.places,
-  });
+  const TrendingPlacesSection({super.key, required this.places});
 
   @override
   Widget build(BuildContext context) {

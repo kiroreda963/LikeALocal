@@ -2,73 +2,82 @@ import 'package:flutter/material.dart';
 import '../widgets/featured_place_card.dart';
 import '../widgets/hidden_gem_card.dart';
 import '../widgets/trending_places_section.dart';
+import '../../Providers/PlaceProvider.dart';
+import 'package:provider/provider.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final trendingPlaces = [
-      TrendingPlaceData(
-        imageUrl:
-            'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400',
-        name: 'Al Khal Egyptian Restaurant',
-        location: 'City Stars Mall',
-        distance: '2 km',
-        rating: 4.2,
-        category: 'Restaurant',
-      ),
-      TrendingPlaceData(
-        imageUrl:
-            'https://images.unsplash.com/photo-1514190051997-0f6f39ca5cde?w=400',
-        name: 'Al Khal Egyptian Restaurant',
-        location: 'City Stars Mall',
-        distance: '2 km',
-        rating: 4.2,
-        category: 'Restaurant',
-      ),
-      TrendingPlaceData(
-        imageUrl:
-            'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400',
-        name: 'Nile View Restaurant',
-        location: 'Corniche',
-        distance: '3.5 km',
-        rating: 4.5,
-        category: 'Restaurant',
-      ),
-      TrendingPlaceData(
-        imageUrl:
-            'https://images.unsplash.com/photo-1552566626-52f8b828add9?w=400',
-        name: 'Cairo Jazz Club',
-        location: 'Mohandessin',
-        distance: '5 km',
-        rating: 4.3,
-        category: 'Nightlife',
-      ),
-    ];
+  State<HomePage> createState() => _HomePageState();
+}
 
-    final hiddenGems = [
-      HiddenGemData(
-        imageUrl:
-            'https://cdn.britannica.com/65/114465-050-8C96BD81/Hall-of-Mirrors-ceiling-Jules-Hardouin-Mansart-Charles.jpg',
-        name: 'Manial Palace Museum',
-        description:
-            'A stunning royal palace with gardens, Islamic architecture, and a small museum inside. Very peaceful and not crowded.',
-        location: 'Roda Island (El Manial), Cairo',
-        category: 'Cultural',
-        rating: 4.5,
-      ),
-      HiddenGemData(
-        imageUrl:
-            'https://cdn.britannica.com/65/114465-050-8C96BD81/Hall-of-Mirrors-ceiling-Jules-Hardouin-Mansart-Charles.jpg',
-        name: 'Manial Palace Museum',
-        description:
-            'A stunning royal palace with gardens, Islamic architecture, and a small museum inside. Very peaceful and not crowded.',
-        location: 'Roda Island (El Manial), Cairo',
-        category: 'Cultural',
-        rating: 4.5,
-      ),
-    ];
+class _HomePageState extends State<HomePage> {
+  bool _didFetch = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_didFetch) {
+      _didFetch = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final placesProvider = Provider.of<PlacesProvider>(
+          context,
+          listen: false,
+        );
+        placesProvider.fetchPlaces();
+        placesProvider.fetchHiddenGems();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final placesProvider = Provider.of<PlacesProvider>(context);
+    final trendingPlaces = placesProvider.places.map((place) {
+      return TrendingPlaceData(
+        imageUrl: place.imageUrl,
+        name: place.placeName,
+        location: place.category, // or add real location field later
+        distance: '2 km', // placeholder for now (you can calculate later)
+        rating: place.rating,
+        category: place.category,
+      );
+    }).toList();
+
+    final hiddenGems = placesProvider.hiddenGems.map((place) {
+      return HiddenGemData(
+        imageUrl: place.imageUrl,
+        name: place.placeName,
+        description: place.description,
+        location: place.category, // or add real location field later
+        category: place.category,
+        rating: place.rating,
+      );
+    }).toList();
+
+    // final hiddenGems = [
+    //   HiddenGemData(
+    //     imageUrl:
+    //         'https://cdn.britannica.com/65/114465-050-8C96BD81/Hall-of-Mirrors-ceiling-Jules-Hardouin-Mansart-Charles.jpg',
+    //     name: 'Manial Palace Museum',
+    //     description:
+    //         'A stunning royal palace with gardens, Islamic architecture, and a small museum inside. Very peaceful and not crowded.',
+    //     location: 'Roda Island (El Manial), Cairo',
+    //     category: 'Cultural',
+    //     rating: 4.5,
+    //   ),
+    //   HiddenGemData(
+    //     imageUrl:
+    //         'https://cdn.britannica.com/65/114465-050-8C96BD81/Hall-of-Mirrors-ceiling-Jules-Hardouin-Mansart-Charles.jpg',
+    //     name: 'Manial Palace Museum',
+    //     description:
+    //         'A stunning royal palace with gardens, Islamic architecture, and a small museum inside. Very peaceful and not crowded.',
+    //     location: 'Roda Island (El Manial), Cairo',
+    //     category: 'Cultural',
+    //     rating: 4.5,
+    //   ),
+    // ];
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),

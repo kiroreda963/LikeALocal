@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../add_place/pages/add_place_page.dart';
 
 class BottomNavBar extends StatelessWidget {
   final int currentIndex;
@@ -43,7 +44,11 @@ class BottomNavBar extends StatelessWidget {
                 isActive: currentIndex == 1,
                 onTap: () => onTap(1),
               ),
-              _AddButton(onTap: () {}),
+              _AddButton(
+                onTap: () {
+                  Navigator.pushNamed(context, '/add-place');
+                },
+              ),
               _NavItem(
                 icon: Icons.map_outlined,
                 activeIcon: Icons.map,

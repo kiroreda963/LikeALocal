@@ -2,6 +2,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -17,6 +19,7 @@ class AddPlacePage extends StatefulWidget {
 class _AddPlacePageState extends State<AddPlacePage> {
   final TextEditingController placeNameController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
+  final TextEditingController imageUrlController = TextEditingController();
 
   String? selectedCategory;
   String? selectedPriceRange;
@@ -96,6 +99,8 @@ class _AddPlacePageState extends State<AddPlacePage> {
   Future<void> publishPlace() async {
     final placeName = placeNameController.text.trim();
     final description = descriptionController.text.trim();
+    final imageUrlFromInput = imageUrlController.text.trim();
+    final currentUser = FirebaseAuth.instance.currentUser;
 
     if (placeName.isEmpty ||
         description.isEmpty ||
@@ -111,21 +116,77 @@ class _AddPlacePageState extends State<AddPlacePage> {
       return;
     }
 
+    if (selectedImageBytes == null && imageUrlFromInput.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please upload an image or provide an image URL'),
+        ),
+      );
+      return;
+    }
+
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in to add a place')),
+      );
+      return;
+    }
+
     setState(() {
       isLoading = true;
     });
 
     try {
-      await FirebaseFirestore.instance.collection('places').add({
-        'placeName': placeName,
-        'description': description,
-        'category': selectedCategory,
-        'priceRange': selectedPriceRange,
-        'imageName': selectedImageName,
-        'latitude': latitude,
-        'longitude': longitude,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      String imageUrl = imageUrlFromInput;
+
+      // Upload image if available (priority over URL)
+      if (selectedImageBytes != null && selectedImageName != null) {
+        final fileName =
+            'places/${DateTime.now().millisecondsSinceEpoch}_$selectedImageName';
+        final ref = FirebaseStorage.instance.ref().child(fileName);
+
+        await ref.putData(selectedImageBytes!);
+        imageUrl = await ref.getDownloadURL();
+      }
+
+      // Get user name and ID
+      final authorId = currentUser.uid;
+
+      // Save place to Firestore
+      final placeRef = await FirebaseFirestore.instance
+          .collection('places')
+          .add({
+            'placeName': placeName,
+            'authorId': authorId,
+            'description': description,
+            'category': selectedCategory,
+            'priceRange': selectedPriceRange,
+            'imageUrl': imageUrl,
+            'imageName': selectedImageName,
+            'latitude': latitude,
+            'longitude': longitude,
+            'rating': 0.0,
+            'reviewCount': 0,
+            'favoredByUsers': [],
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+
+      // Add place ID to user's addedPlaces array
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(authorId)
+          .update({
+            'addedPlaces': FieldValue.arrayUnion([placeRef.id]),
+          })
+          .catchError((e) {
+            // If user document doesn't exist, create it with addedPlaces
+            return FirebaseFirestore.instance
+                .collection('users')
+                .doc(authorId)
+                .set({
+                  'addedPlaces': [placeRef.id],
+                }, SetOptions(merge: true));
+          });
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Place published successfully')),
@@ -133,6 +194,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
 
       placeNameController.clear();
       descriptionController.clear();
+      imageUrlController.clear();
 
       setState(() {
         selectedCategory = null;
@@ -142,10 +204,15 @@ class _AddPlacePageState extends State<AddPlacePage> {
         latitude = null;
         longitude = null;
       });
+
+      // Navigate back after successful publish
+      if (mounted) {
+        Navigator.pop(context);
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error publishing place: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error publishing place: $e')));
     }
 
     setState(() {
@@ -157,6 +224,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
   void dispose() {
     placeNameController.dispose();
     descriptionController.dispose();
+    imageUrlController.dispose();
     super.dispose();
   }
 
@@ -171,7 +239,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF8EEEE),
+        backgroundColor: const Color.fromARGB(255, 219, 219, 219),
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
@@ -243,15 +311,28 @@ class _AddPlacePageState extends State<AddPlacePage> {
                   hint: const Text('Select category'),
                   items: const [
                     DropdownMenuItem(
-                      value: 'Restaurant',
-                      child: Text('Restaurant'),
+                      value: 'Historical Places',
+                      child: Text('Historical Places'),
                     ),
-                    DropdownMenuItem(value: 'Cafe', child: Text('Cafe')),
-                    DropdownMenuItem(value: 'Hotel', child: Text('Hotel')),
-                    DropdownMenuItem(value: 'Museum', child: Text('Museum')),
                     DropdownMenuItem(
-                      value: 'Hidden Gem',
-                      child: Text('Hidden Gem'),
+                      value: 'Restaurants & Cafes',
+                      child: Text('Restaurants & Cafes'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Shopping',
+                      child: Text('Shopping'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Entertainment',
+                      child: Text('Entertainment'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Nightlife',
+                      child: Text('Nightlife'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Beaches & Resorts',
+                      child: Text('Beaches & Resorts'),
                     ),
                   ],
                   onChanged: (value) {
@@ -277,13 +358,16 @@ class _AddPlacePageState extends State<AddPlacePage> {
                   ),
                   hint: const Text('Select price range'),
                   items: const [
-                    DropdownMenuItem(value: '\$', child: Text('\$')),
-                    DropdownMenuItem(value: '\$\$', child: Text('\$\$')),
-                    DropdownMenuItem(value: '\$\$\$', child: Text('\$\$\$')),
+                    DropdownMenuItem(value: '<15', child: Text('Under \$15')),
                     DropdownMenuItem(
-                      value: '\$\$\$\$',
-                      child: Text('\$\$\$\$'),
+                      value: '15-40',
+                      child: Text('\$15 – \$40'),
                     ),
+                    DropdownMenuItem(
+                      value: '40-100',
+                      child: Text('\$40 – \$100'),
+                    ),
+                    DropdownMenuItem(value: '100+', child: Text('Over \$100')),
                   ],
                   onChanged: (value) {
                     setState(() {
@@ -345,6 +429,23 @@ class _AddPlacePageState extends State<AddPlacePage> {
                 const SizedBox(height: 25),
 
                 const Text(
+                  'Image URL (Optional)',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: imageUrlController,
+                  decoration: InputDecoration(
+                    hintText: 'Enter image URL',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 25),
+
+                const Text(
                   'Location Picker',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                 ),
@@ -390,7 +491,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
                                     child: const Icon(
                                       Icons.location_on,
                                       size: 45,
-                                      color: Color(0xFF8A4D61),
+                                      color: Color.fromARGB(255, 0, 0, 0),
                                     ),
                                   ),
                                 ],
@@ -407,7 +508,12 @@ class _AddPlacePageState extends State<AddPlacePage> {
                             label: const Text('Use current'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.white,
-                              foregroundColor: const Color(0xFF8A4D61),
+                              foregroundColor: const Color.fromARGB(
+                                255,
+                                100,
+                                100,
+                                100,
+                              ),
                             ),
                           ),
                         ),
@@ -426,7 +532,10 @@ class _AddPlacePageState extends State<AddPlacePage> {
                   const SizedBox(height: 8),
                   const Text(
                     'Tap the map or use current location',
-                    style: TextStyle(fontSize: 14, color: Colors.grey),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Color.fromRGBO(158, 158, 158, 1),
+                    ),
                   ),
                 ],
 
@@ -437,7 +546,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
                   height: 60,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFF8E6EA),
+                      backgroundColor: const Color.fromARGB(255, 219, 219, 219),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(30),
                       ),
@@ -450,7 +559,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
                             style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF8A4D61),
+                              color: Color.fromARGB(255, 0, 0, 0),
                             ),
                           ),
                   ),

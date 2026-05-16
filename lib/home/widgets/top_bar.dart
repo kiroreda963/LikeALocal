@@ -3,10 +3,7 @@ import 'package:flutter/material.dart';
 class TopBar extends StatelessWidget implements PreferredSizeWidget {
   final String userName;
 
-  const TopBar({
-    super.key,
-    required this.userName,
-  });
+  const TopBar({super.key, required this.userName});
 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
@@ -28,7 +25,9 @@ class TopBar extends StatelessWidget implements PreferredSizeWidget {
       actions: [
         IconButton(
           icon: const Icon(Icons.chat_bubble_outline, color: Colors.black87),
-          onPressed: () {},
+          onPressed: () {
+            Navigator.pushNamed(context, '/chat');
+          },
         ),
         IconButton(
           icon: const Icon(Icons.notifications_none, color: Colors.black87),
