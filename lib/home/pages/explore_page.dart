@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../Providers/PlaceProvider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../Providers/PlaceProvider.dart';
+import '../../Models/place_model.dart';
+import '../../Models/user_model.dart' as user_model;
+import '../../Models/conversation_model.dart';
+import '../../messaging/messaging_service.dart';
+import '../../messaging/pages/chat_screen.dart';
+import '../../auth/auth_provider.dart' as local_auth;
 
 class ExplorePage extends StatefulWidget {
   const ExplorePage({super.key});
@@ -26,6 +34,90 @@ class _ExplorePageState extends State<ExplorePage> {
     }
   }
 
+  Future<Map<String, String>> _fetchUserMeta(String userId) async {
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .get();
+    final data = userDoc.data() ?? {};
+    return {
+      'name': (data['name'] as String?)?.trim() ?? 'User',
+      'avatar': (data['photoUrl'] as String?) ?? '',
+    };
+  }
+
+  Future<void> _openChatWithAuthor(Place place) async {
+    final firebaseUser = FirebaseAuth.instance.currentUser;
+    if (firebaseUser == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please log in to chat with the post owner'),
+        ),
+      );
+      return;
+    }
+
+    final currentUser =
+        await context.read<local_auth.AuthProvider>().getAllUserInfo() ??
+        user_model.User(
+          uid: firebaseUser.uid,
+          name: firebaseUser.displayName ?? 'You',
+          email: firebaseUser.email ?? '',
+          phoneNumber: '',
+          photoUrl: firebaseUser.photoURL,
+        );
+
+    if (place.authorId.isEmpty || place.authorId == currentUser.uid) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to open chat with this post owner'),
+        ),
+      );
+      return;
+    }
+
+    final authorMeta = await _fetchUserMeta(place.authorId);
+
+    final service = MessagingService();
+    final conversationId = await service.createOrGetConversation(
+      currentUserId: currentUser.uid,
+      otherUserId: place.authorId,
+      currentUserName: currentUser.name.isNotEmpty ? currentUser.name : 'You',
+      otherUserName: authorMeta['name'] ?? 'User',
+      currentUserAvatar: currentUser.photoUrl ?? '',
+      otherUserAvatar: authorMeta['avatar'] ?? '',
+      otherUserOnline: true,
+    );
+
+    final convDoc = await FirebaseFirestore.instance
+        .collection('conversations')
+        .doc(conversationId)
+        .get();
+
+    if (!convDoc.exists) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open chat conversation')),
+      );
+      return;
+    }
+
+    final conversation = ConversationModel.fromDoc(convDoc, currentUser.uid);
+    if (!mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          conversation: conversation,
+          currentUserId: currentUser.uid,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<PlacesProvider>();
@@ -35,101 +127,122 @@ class _ExplorePageState extends State<ExplorePage> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        title: const Text('Explore', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Explore',
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+        ),
         centerTitle: true,
       ),
       body: provider.isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Column(
-            children: [
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Column(
+                  children: [
+                    const Center(
+                      child: Text(
+                        "Price Range",
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: ['All', r'$', r'$$', r'$$$', r'$$$$'].map((
+                        price,
+                      ) {
+                        final isSelected = provider.selectedPrice == price;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: ChoiceChip(
+                            label: Text(price),
+                            selected: isSelected,
+                            selectedColor: Colors.grey.shade400,
+                            backgroundColor: Colors.grey.shade100,
+                            onSelected: (bool selected) {
+                              provider.setPriceRange(selected ? price : 'All');
+                            },
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 20),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            childAspectRatio: 2.2,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                          ),
+                      itemCount: 5,
+                      itemBuilder: (context, index) {
+                        final categories = [
+                          'Top Rated',
+                          'Trending Now',
+                          'Feeling Hungry',
+                          'Looking for a Breeze',
+                          'Up Late?',
+                        ];
+                        final category = categories[index];
+                        final isSelected =
+                            provider.selectedCategory == category;
 
-              const Center(
-                child: Text("Price Range", style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: ['All', r'$', r'$$', r'$$$',r'$$$$'].map((price) {
-                  final isSelected = provider.selectedPrice == price;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: ChoiceChip(
-                      label: Text(price),
-                      selected: isSelected,
-                      selectedColor: Colors.grey.shade400,
-                      backgroundColor: Colors.grey.shade100,
-                      onSelected: (bool selected) {
-                        provider.setPriceRange(selected ? price : 'All');
+                        return InkWell(
+                          onTap: () => provider.setCategory(
+                            isSelected ? 'All' : category,
+                          ),
+                          child: Container(
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? Colors.grey.shade400
+                                  : Colors.grey.shade200,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              category,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        );
                       },
                     ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 20),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 2.2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                ),
-                itemCount: 5,
-                itemBuilder: (context, index) {
-                  final categories = [
-                    'Top Rated', 'Trending Now',
-                    'Feeling Hungry', 'Looking for a Breeze',
-                    'Up Late?'
-                  ];
-                  final category = categories[index];
-                  final isSelected = provider.selectedCategory == category;
-
-                  return InkWell(
-                    onTap: () => provider.setCategory(isSelected ? 'All' : category),
-                    child: Container(
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: isSelected ? Colors.grey.shade400 : Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        category,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
+                    const SizedBox(height: 20),
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: provider.filteredPlaces.length,
+                      itemBuilder: (context, index) {
+                        final place = provider.filteredPlaces[index];
+                        return _buildPlaceCard(
+                          place: place,
+                          name: place.placeName,
+                          description: place.description,
+                          rating: place.rating.toString(),
+                          imageUrl: place.imageUrl,
+                          longitude: place.longitude,
+                          latitude: place.latitude,
+                          locationUrl:
+                              'https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}',
+                          onChatTap: () => _openChatWithAuthor(place),
+                        );
+                      },
                     ),
-                  );
-                },
+                  ],
+                ),
               ),
-              const SizedBox(height: 20),
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: provider.filteredPlaces.length,
-                itemBuilder: (context, index) {
-                  final place = provider.filteredPlaces[index];
-                  return _buildPlaceCard(
-                    name: place.placeName,
-                    description: place.description,
-                    rating: place.rating.toString(),
-                    imageUrl: place.imageUrl,
-                      longitude: place.longitude,
-                      latitude: place.latitude,
-                    locationUrl: 'https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}',
-                                      );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
+            ),
     );
   }
 
   Widget _buildPlaceCard({
+    required Place place,
     required String name,
     required String description,
     required String rating,
@@ -137,7 +250,7 @@ class _ExplorePageState extends State<ExplorePage> {
     required String locationUrl,
     required double longitude,
     required double latitude,
-
+    required VoidCallback onChatTap,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -156,7 +269,10 @@ class _ExplorePageState extends State<ExplorePage> {
               Expanded(
                 child: Text(
                   name,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -164,9 +280,12 @@ class _ExplorePageState extends State<ExplorePage> {
                 children: [
                   const Icon(Icons.stars, size: 20, color: Colors.amber),
                   const SizedBox(width: 4),
-                  Text(rating, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text(
+                    rating,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ],
-              )
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -189,20 +308,30 @@ class _ExplorePageState extends State<ExplorePage> {
                   width: 60,
                   height: 60,
                   fit: BoxFit.cover,
-                  errorBuilder: (c, e, s) => Container(width: 60, height: 60, color: Colors.grey[200]),
+                  errorBuilder: (c, e, s) =>
+                      Container(width: 60, height: 60, color: Colors.grey[200]),
                 ),
-              )
+              ),
             ],
           ),
           const SizedBox(height: 12),
           Row(
             children: [
-              _buildCardButton('Look \nOn maps', Icons.location_on_outlined, () => _launchURL(locationUrl)),
-              const SizedBox(width: 8),
-             _buildCardButton("Chat with Post Owner", Icons.chat_bubble_outline, () => ("gg") )
-              ],
-          )],
+              _buildCardButton(
+                'Look \nOn maps',
+                Icons.location_on_outlined,
+                () => _launchURL(locationUrl),
               ),
+              const SizedBox(width: 8),
+              _buildCardButton(
+                'Chat with Post Owner',
+                Icons.chat_bubble_outline,
+                onChatTap,
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -219,7 +348,13 @@ class _ExplorePageState extends State<ExplorePage> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
               Icon(icon, size: 20),
             ],
           ),
