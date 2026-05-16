@@ -9,8 +9,6 @@ class Place {
   final String category;
   final double rating;
   final String imageUrl;
-  final double latitude;
-  final double longitude;
   final DateTime createdAt;
   final List<String> favoredByUsers;
   final int reviewCount;
@@ -26,8 +24,6 @@ class Place {
     required this.category,
     required this.rating,
     required this.imageUrl,
-    required this.latitude,
-    required this.longitude,
     required this.createdAt,
     this.favoredByUsers = const [],
     this.reviewCount = 0,
@@ -46,8 +42,6 @@ class Place {
       category: map['category'] ?? '',
       rating: (map['rating'] ?? 0.0).toDouble(),
       imageUrl: map['imageUrl'] ?? '',
-      latitude: (map['latitude'] ?? 0.0).toDouble(),
-      longitude: (map['longitude'] ?? 0.0).toDouble(),
       createdAt: map['createdAt'] != null
           ? (map['createdAt'] as dynamic).toDate()
           : DateTime.now(),
@@ -68,8 +62,6 @@ class Place {
       'category': category,
       'rating': rating,
       'imageUrl': imageUrl,
-      'latitude': latitude,
-      'longitude': longitude,
       'createdAt': createdAt,
       'favoredByUsers': favoredByUsers,
       'reviewCount': reviewCount,
@@ -86,8 +78,6 @@ class Place {
     String? category,
     double? rating,
     String? imageUrl,
-    double? latitude,
-    double? longitude,
     DateTime? createdAt,
     List<String>? favoredByUsers,
     int? reviewCount,
@@ -100,9 +90,9 @@ class Place {
       description: description ?? this.description,
       category: category ?? this.category,
       rating: rating ?? this.rating,
+      longitude: this.longitude,
+      latitude: this.latitude,
       imageUrl: imageUrl ?? this.imageUrl,
-      latitude: latitude ?? this.latitude,
-      longitude: longitude ?? this.longitude,
       createdAt: createdAt ?? this.createdAt,
       favoredByUsers: favoredByUsers ?? this.favoredByUsers,
       reviewCount: reviewCount ?? this.reviewCount,
