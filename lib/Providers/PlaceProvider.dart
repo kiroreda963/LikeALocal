@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
+import 'dart:math';
 import '../Models/place_model.dart';
 import '../Models/review_model.dart';
-import 'dart:math';
 
 class PlacesProvider with ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -10,6 +11,10 @@ class PlacesProvider with ChangeNotifier {
   List<Place> _hiddenGems = [];
   Map<String, List<Review>> _reviewsCache = {};
   final Map<String, String> _userNameCache = {};
+
+  // 🔄 Stream subscriptions
+  StreamSubscription<QuerySnapshot>? _placesSubscription;
+  StreamSubscription<QuerySnapshot>? _hiddenGemsSubscription;
 
   List<Place> get places => _places;
   List<Place> get hiddenGems => _hiddenGems;
@@ -22,60 +27,98 @@ class PlacesProvider with ChangeNotifier {
   String? _error;
   String? get error => _error;
 
-  // 🔄 Fetch all places from Firestore
-  Future<void> fetchPlaces() async {
-    try {
-      _isLoading = true;
-      _error = null;
-      notifyListeners();
+  // ============================================
+  // 🔄 REAL-TIME PLACES FETCHING WITH STREAMS
+  // ============================================
+  void fetchPlaces() {
+    // Cancel existing subscription to prevent duplicates
+    _placesSubscription?.cancel();
 
-      final snapshot = await _firestore.collection('places').get();
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
 
-      _places = snapshot.docs
-          .map((doc) => Place.fromMap(doc.data(), doc.id))
-          .toList();
-      _places.sort((a, b) {
-        return b.rating.compareTo(a.rating); // highest rating first
-      });
-    } catch (e) {
-      _error = e.toString();
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
+    _placesSubscription = _firestore
+        .collection('places')
+        .snapshots()
+        .listen(
+          (snapshot) {
+            try {
+              _places = snapshot.docs
+                  .map((doc) => Place.fromMap(doc.data(), doc.id))
+                  .toList();
+
+              // Sort by rating (highest first)
+              _places.sort((a, b) {
+                return b.rating.compareTo(a.rating);
+              });
+
+              _isLoading = false;
+              _error = null;
+              notifyListeners(); // Rebuild UI with new data
+            } catch (e) {
+              _error = e.toString();
+              _isLoading = false;
+              notifyListeners();
+            }
+          },
+          onError: (error) {
+            _error = error.toString();
+            _isLoading = false;
+            notifyListeners();
+          },
+        );
   }
 
-  Future<void> fetchHiddenGems() async {
-    try {
-      _isLoading = true;
-      _error = null;
-      notifyListeners();
+  // ============================================
+  // 🎲 REAL-TIME HIDDEN GEMS WITH STREAMS
+  // ============================================
+  void fetchHiddenGems() {
+    // Cancel existing subscription
+    _hiddenGemsSubscription?.cancel();
 
-      final snapshot = await _firestore.collection('places').get();
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
 
-      _hiddenGems = snapshot.docs
-          .map((doc) => Place.fromMap(doc.data(), doc.id))
-          .toList();
+    _hiddenGemsSubscription = _firestore
+        .collection('places')
+        .snapshots()
+        .listen(
+          (snapshot) {
+            try {
+              _hiddenGems = snapshot.docs
+                  .map((doc) => Place.fromMap(doc.data(), doc.id))
+                  .toList();
 
-      // Shuffle randomly
-      _hiddenGems.shuffle(Random());
+              // Shuffle randomly
+              _hiddenGems.shuffle(Random());
 
-      // Take only 5 places
-      _hiddenGems = _hiddenGems.take(5).toList();
-    } catch (e) {
-      _error = e.toString();
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
+              // Take only 5 places
+              _hiddenGems = _hiddenGems.take(5).toList();
+
+              _isLoading = false;
+              _error = null;
+              notifyListeners();
+            } catch (e) {
+              _error = e.toString();
+              _isLoading = false;
+              notifyListeners();
+            }
+          },
+          onError: (error) {
+            _error = error.toString();
+            _isLoading = false;
+            notifyListeners();
+          },
+        );
   }
 
   // ➕ Add new place
   Future<void> addPlace(Place place) async {
     try {
       await _firestore.collection('places').add(place.toMap());
-
-      await fetchPlaces(); // refresh list
+      // No need to call fetchPlaces() - stream will automatically update
     } catch (e) {
       _error = e.toString();
       notifyListeners();
@@ -94,10 +137,9 @@ class PlacesProvider with ChangeNotifier {
 
   void setCategory(String category) {
     _selectedCategory = category;
-    notifyListeners(); // UI will rebuild when a category is clicked
+    notifyListeners();
   }
 
-  // 🔍 Get single place by id (optional)
   // 🔍 Get single place by id
   Future<Place?> getPlaceById(String id) async {
     try {
@@ -112,7 +154,7 @@ class PlacesProvider with ChangeNotifier {
     }
   }
 
-  String _selectedPrice = 'All'; // Default state
+  String _selectedPrice = 'All';
   String get selectedPrice => _selectedPrice;
 
   void setPriceRange(String price) {
@@ -120,72 +162,105 @@ class PlacesProvider with ChangeNotifier {
     notifyListeners();
   }
 
-// In your PlaceProvider or UserProvider
-Future<void> addFavorite(String userId, String placeId) async {
-  try {
-    final userDoc = FirebaseFirestore.instance.collection('users').doc(userId);
-    await userDoc.update({
-      'favoredPlaces': FieldValue.arrayUnion([placeId])
-    });
-  } catch (e) {
-    debugPrint('Error adding favorite: $e');
+  // ❤️ Add favorite
+  Future<void> addFavorite(String userId, String placeId) async {
+    try {
+      final userDoc = FirebaseFirestore.instance.collection('users').doc(userId);
+      await userDoc.update({
+        'favoredPlaces': FieldValue.arrayUnion([placeId])
+      });
+    } catch (e) {
+      debugPrint('Error adding favorite: $e');
+    }
   }
-}
 
-Future<void> removeFavorite(String userId, String placeId) async {
-  try {
-    final userDoc = FirebaseFirestore.instance.collection('users').doc(userId);
-    await userDoc.update({
-      'favoredPlaces': FieldValue.arrayRemove([placeId])
-    });
-  } catch (e) {
-    debugPrint('Error removing favorite: $e');
+  // 🚫 Remove favorite
+  Future<void> removeFavorite(String userId, String placeId) async {
+    try {
+      final userDoc = FirebaseFirestore.instance.collection('users').doc(userId);
+      await userDoc.update({
+        'favoredPlaces': FieldValue.arrayRemove([placeId])
+      });
+    } catch (e) {
+      debugPrint('Error removing favorite: $e');
+    }
   }
-}
 
-Future<bool> isFavorited(String userId, String placeId) async {
-  try {
-    final userDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .get();
-    
-    if (!userDoc.exists) return false;
-    
-    final favoredPlaces = List<String>.from(userDoc['favoredPlaces'] ?? []);
-    return favoredPlaces.contains(placeId);
-  } catch (e) {
-    debugPrint('Error checking favorite: $e');
-    return false;
-  }
-}
+  // ✅ Check if favorited
+  Future<bool> isFavorited(String userId, String placeId) async {
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
 
-Future<List<Place>> getFavorites(String userId) async {
-  try {
-    final userDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .get();
-    
-    if (!userDoc.exists) return [];
-    
-    final favoredPlaceIds = List<String>.from(userDoc['favoredPlaces'] ?? []);
-    
-    if (favoredPlaceIds.isEmpty) return [];
-    
-    final placesSnapshot = await FirebaseFirestore.instance
-        .collection('places')
-        .where(FieldPath.documentId, whereIn: favoredPlaceIds)
-        .get();
-    
-    return placesSnapshot.docs
-        .map((doc) => Place.fromMap(doc.data(), doc.id))
-        .toList();
-  } catch (e) {
-    debugPrint('Error getting favorites: $e');
-    return [];
+      if (!userDoc.exists) return false;
+
+      final favoredPlaces = List<String>.from(userDoc['favoredPlaces'] ?? []);
+      return favoredPlaces.contains(placeId);
+    } catch (e) {
+      debugPrint('Error checking favorite: $e');
+      return false;
+    }
   }
-}
+
+  Future<List<Place>> _fetchPlacesByIds(List<String> placeIds) async {
+    if (placeIds.isEmpty) return [];
+
+    final places = <Place>[];
+    for (var i = 0; i < placeIds.length; i += 10) {
+      final end = min(i + 10, placeIds.length);
+      final chunk = placeIds.sublist(i, end);
+
+      final placesSnapshot = await _firestore
+          .collection('places')
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+
+      places.addAll(
+        placesSnapshot.docs
+            .map((doc) => Place.fromMap(doc.data(), doc.id))
+            .toList(),
+      );
+    }
+    return places;
+  }
+
+  // 📚 Get favorites list
+  Future<List<Place>> getFavorites(String userId) async {
+    try {
+      final userDoc =
+          await _firestore.collection('users').doc(userId).get();
+
+      if (!userDoc.exists) return [];
+
+      final favoredPlaceIds =
+          List<String>.from(userDoc['favoredPlaces'] ?? []);
+
+      return _fetchPlacesByIds(favoredPlaceIds);
+    } catch (e) {
+      debugPrint('Error getting favorites: $e');
+      return [];
+    }
+  }
+
+  // 📍 Get places the user added ("My places")
+  Future<List<Place>> getUserAddedPlaces(String userId) async {
+    try {
+      final userDoc =
+          await _firestore.collection('users').doc(userId).get();
+
+      if (!userDoc.exists) return [];
+
+      final addedPlaceIds =
+          List<String>.from(userDoc['addedPlaces'] ?? []);
+
+      return _fetchPlacesByIds(addedPlaceIds);
+    } catch (e) {
+      debugPrint('Error getting user added places: $e');
+      return [];
+    }
+  }
 
   // 📝 Add review to place
   Future<void> addReview({
@@ -204,13 +279,13 @@ Future<List<Place>> getFavorites(String userId) async {
           .doc(placeId)
           .collection('reviews')
           .add({
-            'userId': userId,
-            'placeId': placeId,
-            'userName': userName,
-            'reviewText': reviewText,
-            'rating': rating,
-            'createdAt': FieldValue.serverTimestamp(),
-          });
+        'userId': userId,
+        'placeId': placeId,
+        'userName': userName,
+        'reviewText': reviewText,
+        'rating': rating,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
 
       // Update place rating and review count
       final placeDoc = await placeRef.get();
@@ -219,8 +294,7 @@ Future<List<Place>> getFavorites(String userId) async {
         final currentRating = placeDoc['rating'] ?? 0.0;
 
         // Calculate new average rating
-        final newRating =
-            ((currentRating * currentReviewCount) + rating) /
+        final newRating = ((currentRating * currentReviewCount) + rating) /
             (currentReviewCount + 1);
 
         await placeRef.update({
@@ -231,21 +305,6 @@ Future<List<Place>> getFavorites(String userId) async {
 
       // Clear reviews cache for this place
       _reviewsCache.remove(placeId);
-
-      // Update local place
-      final placeIndex = _places.indexWhere((p) => p.id == placeId);
-      if (placeIndex != -1) {
-        final updatedPlace = _places[placeIndex].copyWith(
-          reviewCount: _places[placeIndex].reviewCount + 1,
-          rating:
-              ((_places[placeIndex].rating * _places[placeIndex].reviewCount) +
-                  rating) /
-              (_places[placeIndex].reviewCount + 1),
-        );
-        _places[placeIndex] = updatedPlace;
-        notifyListeners();
-      }
-
       notifyListeners();
     } catch (e) {
       _error = e.toString();
@@ -253,7 +312,7 @@ Future<List<Place>> getFavorites(String userId) async {
     }
   }
 
-  // 🔁 Add or update a user's review for a place (prevent duplicates)
+  // 🔁 Add or update a user's review for a place
   Future<void> addOrUpdateReview({
     required String userId,
     required String placeId,
@@ -292,7 +351,7 @@ Future<List<Place>> getFavorites(String userId) async {
         });
       }
 
-      // Recalculate rating and reviewCount from all reviews for accuracy
+      // Recalculate rating and reviewCount from all reviews
       final snapshot = await reviewsRef.get();
       final count = snapshot.docs.length;
       double sum = 0.0;
@@ -305,23 +364,26 @@ Future<List<Place>> getFavorites(String userId) async {
       final placeRef = _firestore.collection('places').doc(placeId);
       await placeRef.update({'rating': newRating, 'reviewCount': count});
 
-      // Clear cache and update local place
+      // Clear cache
       _reviewsCache.remove(placeId);
+      
+      // Update local place if it exists
       final placeIndex = _places.indexWhere((p) => p.id == placeId);
       if (placeIndex != -1) {
         _places[placeIndex] = _places[placeIndex].copyWith(
           rating: newRating,
           reviewCount: count,
         );
-        notifyListeners();
       }
+      
+      notifyListeners();
     } catch (e) {
       _error = e.toString();
       notifyListeners();
     }
   }
 
-  // ❌ Delete a review by id and update place stats
+  // ❌ Delete a review by id
   Future<void> deleteReview({
     required String placeId,
     required String reviewId,
@@ -331,6 +393,7 @@ Future<List<Place>> getFavorites(String userId) async {
           .collection('places')
           .doc(placeId)
           .collection('reviews');
+      
       await reviewsRef.doc(reviewId).delete();
 
       // Recalculate rating and reviewCount
@@ -346,23 +409,26 @@ Future<List<Place>> getFavorites(String userId) async {
       final placeRef = _firestore.collection('places').doc(placeId);
       await placeRef.update({'rating': newRating, 'reviewCount': count});
 
-      // Clear cache and update local place
+      // Clear cache
       _reviewsCache.remove(placeId);
+      
+      // Update local place if it exists
       final placeIndex = _places.indexWhere((p) => p.id == placeId);
       if (placeIndex != -1) {
         _places[placeIndex] = _places[placeIndex].copyWith(
           rating: newRating,
           reviewCount: count,
         );
-        notifyListeners();
       }
+      
+      notifyListeners();
     } catch (e) {
       _error = e.toString();
       notifyListeners();
     }
   }
 
-  // 🔎 Get current user's review for a place (if any)
+  // 🔎 Get current user's review for a place
   Future<Review?> getUserReviewForPlace(String userId, String placeId) async {
     try {
       final snapshot = await _firestore
@@ -372,7 +438,9 @@ Future<List<Place>> getFavorites(String userId) async {
           .where('userId', isEqualTo: userId)
           .limit(1)
           .get();
+      
       if (snapshot.docs.isEmpty) return null;
+      
       final doc = snapshot.docs.first;
       return Review.fromMap(doc.data(), doc.id);
     } catch (e) {
@@ -399,7 +467,7 @@ Future<List<Place>> getFavorites(String userId) async {
       for (final doc in snapshot.docs) {
         var rev = Review.fromMap(doc.data(), doc.id);
 
-        // If username missing or obviously placeholder, try to resolve from users collection
+        // If username missing or placeholder, try to resolve from users collection
         final lowerName = rev.userName.trim().toLowerCase();
         if (rev.userName.isEmpty ||
             lowerName.contains('anon') ||
@@ -417,7 +485,8 @@ Future<List<Place>> getFavorites(String userId) async {
               createdAt: rev.createdAt,
             );
           } else if (uid.isNotEmpty) {
-            final userDoc = await _firestore.collection('users').doc(uid).get();
+            final userDoc =
+                await _firestore.collection('users').doc(uid).get();
             String resolvedName = '';
             if (userDoc.exists && userDoc.data() != null) {
               final nameField = userDoc.data()!['name'];
@@ -461,5 +530,12 @@ Future<List<Place>> getFavorites(String userId) async {
     } catch (e) {
       return [];
     }
+  }
+
+  @override
+  void dispose() {
+    _placesSubscription?.cancel();
+    _hiddenGemsSubscription?.cancel();
+    super.dispose();
   }
 }

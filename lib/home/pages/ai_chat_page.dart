@@ -1,5 +1,13 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
+
+import '../../Models/message_model.dart';
+import '../../Models/place_model.dart';
+import '../../Providers/PlaceProvider.dart';
+import '../../messaging/messaging_service.dart';
+import '../../services/ai_recommendation_service.dart';
 
 class AiChatPage extends StatefulWidget {
   const AiChatPage({super.key});
@@ -12,50 +20,148 @@ class _AiChatPageState extends State<AiChatPage> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final AiRecommendationService _aiService = AiRecommendationService();
+  final MessagingService _messagingService = MessagingService();
+  PlacesProvider? _placesProvider;
 
   final UserTasteProfile _profile = UserTasteProfile();
-  final List<ChatMessage> _messages = [
-    ChatMessage(
-      text: 'Would you like a fancy dinner recommendation ?',
-      fromUser: false,
-      timestamp: DateTime(2026, 5, 11, 11, 40),
-    ),
-  ];
+  UserPlaceContext _placeContext = const UserPlaceContext();
 
+  String? _userId;
   bool _isThinking = false;
 
   @override
+  void initState() {
+    super.initState();
+    _userId = FirebaseAuth.instance.currentUser?.uid;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      _placesProvider = context.read<PlacesProvider>();
+      _placesProvider!.addListener(_onPlacesUpdated);
+      await _loadUserPlaces();
+      final userId = _userId;
+      if (userId != null) {
+        await _messagingService.ensureAiWelcomeMessage(userId);
+      }
+    });
+  }
+
+  void _onPlacesUpdated() {
+    final catalog = context.read<PlacesProvider>().places;
+    if (catalog.isEmpty || !mounted) return;
+
+    setState(() {
+      _placeContext = UserPlaceContext(
+        favorites: _placeContext.favorites,
+        myPlaces: _placeContext.myPlaces,
+        catalog: catalog,
+      );
+    });
+  }
+
+  Future<void> _loadUserPlaces() async {
+    final user = FirebaseAuth.instance.currentUser;
+    final placesProvider = context.read<PlacesProvider>();
+
+    if (placesProvider.places.isEmpty) {
+      placesProvider.fetchPlaces();
+    }
+
+    var favorites = <Place>[];
+    var myPlaces = <Place>[];
+
+    if (user != null) {
+      favorites = await placesProvider.getFavorites(user.uid);
+      myPlaces = await placesProvider.getUserAddedPlaces(user.uid);
+    }
+
+    if (!mounted) return;
+
+    final catalog = placesProvider.places;
+
+    setState(() {
+      _placeContext = UserPlaceContext(
+        favorites: favorites,
+        myPlaces: myPlaces,
+        catalog: catalog,
+      );
+    });
+  }
+
+  @override
   void dispose() {
+    _placesProvider?.removeListener(_onPlacesUpdated);
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _sendMessage([String? quickText]) async {
-    final text = (quickText ?? _messageController.text).trim();
-    if (text.isEmpty || _isThinking) return;
+  Future<void> _sendMessage(
+    String text, {
+    required List<MessageModel> existingMessages,
+  }) async {
+    final userId = _userId;
+    if (text.isEmpty || _isThinking || userId == null) return;
+
+    await _loadUserPlaces();
 
     _messageController.clear();
     _profile.learnFrom(text);
 
-    setState(() {
-      _messages.add(ChatMessage(text: text, fromUser: true));
-      _isThinking = true;
-    });
+    setState(() => _isThinking = true);
     _scrollToBottom();
+
+    await _messagingService.sendAiMessage(
+      userId: userId,
+      senderId: userId,
+      text: text,
+    );
+
+    final history = [
+      ...existingMessages,
+      MessageModel(
+        id: '',
+        senderId: userId,
+        text: text,
+        timestamp: Timestamp.now(),
+        isRead: false,
+      ),
+    ]
+        .map(
+          (message) => (
+            role: message.senderId == userId ? 'User' : 'Assistant',
+            text: message.text,
+          ),
+        )
+        .toList();
 
     final reply = await _aiService.recommend(
       userMessage: text,
       profile: _profile,
-      history: _messages,
+      history: history,
+      placeContext: _placeContext,
+    );
+
+    await _messagingService.sendAiMessage(
+      userId: userId,
+      senderId: MessagingService.aiSenderId,
+      text: reply,
     );
 
     if (!mounted) return;
-    setState(() {
-      _messages.add(ChatMessage(text: reply, fromUser: false));
-      _isThinking = false;
-    });
+    setState(() => _isThinking = false);
     _scrollToBottom();
+  }
+
+  List<ChatMessage> _toChatMessages(List<MessageModel> messages) {
+    final userId = _userId;
+    return messages
+        .map(
+          (message) => ChatMessage(
+            text: message.text,
+            fromUser: message.senderId == userId,
+            timestamp: message.timestamp.toDate(),
+          ),
+        )
+        .toList();
   }
 
   void _scrollToBottom() {
@@ -71,32 +177,109 @@ class _AiChatPageState extends State<AiChatPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFFEDEDED),
-      child: Column(
-        children: [
-          const _AiHeader(),
-          Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.fromLTRB(8, 24, 8, 18),
-              itemCount: _messages.length + (_isThinking ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (_isThinking && index == _messages.length) {
-                  return const _TypingBubble();
-                }
-                return _ChatBubble(message: _messages[index]);
-              },
+    final userId = _userId;
+
+    if (userId == null) {
+      return _chatScaffold(
+        Column(
+          children: [
+            const _AiHeader(),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(8, 24, 8, 18),
+                children: [
+                  _ChatBubble(
+                    message: ChatMessage(
+                      text: MessagingService.aiWelcomeMessage,
+                      fromUser: false,
+                    ),
+                  ),
+                ],
+              ),
             ),
+            _SmartSuggestions(
+              placeContext: _placeContext,
+              onTap: (_) {},
+            ),
+            _MessageComposer(
+              controller: _messageController,
+              enabled: false,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return StreamBuilder<List<MessageModel>>(
+      stream: _messagingService.aiMessagesStream(userId),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return _chatScaffold(
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  'Could not load chat: ${snapshot.error}',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          );
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return _chatScaffold(
+            const Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final stored = snapshot.data ?? [];
+        final messages = _toChatMessages(stored);
+        if (messages.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+        }
+
+        void send(String text) =>
+            _sendMessage(text, existingMessages: stored);
+
+        return _chatScaffold(
+          Column(
+            children: [
+              const _AiHeader(),
+              Expanded(
+                child: ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.fromLTRB(8, 24, 8, 18),
+                  itemCount: messages.length + (_isThinking ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    if (_isThinking && index == messages.length) {
+                      return const _TypingBubble();
+                    }
+                    return _ChatBubble(message: messages[index]);
+                  },
+                ),
+              ),
+              _SmartSuggestions(
+                placeContext: _placeContext,
+                onTap: send,
+              ),
+              _MessageComposer(
+                controller: _messageController,
+                enabled: !_isThinking,
+                onSend: () => send(_messageController.text.trim()),
+              ),
+            ],
           ),
-          _SmartSuggestions(onTap: _sendMessage),
-          _MessageComposer(
-            controller: _messageController,
-            enabled: !_isThinking,
-            onSend: () => _sendMessage(),
-          ),
-        ],
-      ),
+        );
+      },
+    );
+  }
+
+  Widget _chatScaffold(Widget body) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFEDEDED),
+      body: body,
     );
   }
 }
@@ -306,25 +489,47 @@ class _TypingBubble extends StatelessWidget {
 }
 
 class _SmartSuggestions extends StatelessWidget {
+  final UserPlaceContext placeContext;
   final ValueChanged<String> onTap;
 
-  const _SmartSuggestions({required this.onTap});
+  const _SmartSuggestions({
+    required this.placeContext,
+    required this.onTap,
+  });
 
-  @override
-  Widget build(BuildContext context) {
-    final suggestions = [
+  List<String> get _suggestions {
+    if (placeContext.favorites.isNotEmpty) {
+      final fav = placeContext.favorites.first;
+      return [
+        'Similar to ${fav.placeName}',
+        'More ${fav.category} spots',
+        'Hidden gems near my favorites',
+      ];
+    }
+    if (placeContext.myPlaces.isNotEmpty) {
+      final mine = placeContext.myPlaces.first;
+      return [
+        'More like ${mine.placeName}',
+        'Best ${mine.category} nearby',
+        'Quiet spots like my places',
+      ];
+    }
+    return const [
       'Cheap cozy dinner',
       'Quiet hidden gems',
       'Outdoor coffee',
     ];
+  }
 
+  @override
+  Widget build(BuildContext context) {
     return SizedBox(
       height: 42,
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 5),
         scrollDirection: Axis.horizontal,
         itemBuilder: (context, index) {
-          final text = suggestions[index];
+          final text = _suggestions[index];
           return ActionChip(
             label: Text(text),
             backgroundColor: Colors.white,
@@ -336,21 +541,21 @@ class _SmartSuggestions extends StatelessWidget {
           );
         },
         separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemCount: suggestions.length,
+        itemCount: _suggestions.length,
       ),
     );
   }
 }
 
 class _MessageComposer extends StatelessWidget {
-  final TextEditingController controller;
+  final TextEditingController? controller;
   final bool enabled;
-  final VoidCallback onSend;
+  final VoidCallback? onSend;
 
   const _MessageComposer({
-    required this.controller,
+    this.controller,
     required this.enabled,
-    required this.onSend,
+    this.onSend,
   });
 
   @override
@@ -371,7 +576,7 @@ class _MessageComposer extends StatelessWidget {
                   minLines: 1,
                   maxLines: 3,
                   textInputAction: TextInputAction.send,
-                  onSubmitted: (_) => onSend(),
+                  onSubmitted: (_) => onSend?.call(),
                   decoration: InputDecoration(
                     hintText: 'Message...',
                     hintStyle: TextStyle(
@@ -401,108 +606,6 @@ class _MessageComposer extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-class AiRecommendationService {
-  Future<String> recommend({
-    required String userMessage,
-    required UserTasteProfile profile,
-    required List<ChatMessage> history,
-  }) async {
-    final recentContext = history
-        .take(history.isEmpty ? 0 : history.length - 1)
-        .map((message) => '${message.fromUser ? 'User' : 'Assistant'}: ${message.text}')
-        .join('\n');
-
-    final prompt = '''
-You are LikeALocal's AI Assistant. Recommend local places in a concise,
-friendly chat style. Personalize using this learned profile:
-${profile.summary}
-
-Recent chat:
-$recentContext
-
-User message: $userMessage
-
-Give 2-3 specific recommendations. Include why it fits their style,
-expected budget/atmosphere when relevant, and one follow-up question.
-''';
-
-    try {
-      final response = await http.get(
-        Uri.parse(
-          'https://gen.pollinations.ai/text/${Uri.encodeComponent(prompt)}?model=openai',
-        ),
-      );
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final reply = response.body.trim();
-        if (reply.isNotEmpty) return reply;
-      }
-    } catch (_) {
-      return _fallbackRecommendation(userMessage, profile);
-    }
-
-    return _fallbackRecommendation(userMessage, profile);
-  }
-
-  String _fallbackRecommendation(String message, UserTasteProfile profile) {
-    final atmosphere = profile.atmosphere ?? 'cozy';
-    final budget = profile.budget ?? 'medium budget';
-    final placeType = profile.placeType ?? 'hidden gems';
-
-    return 'I learned you lean toward $atmosphere $placeType with a $budget. '
-        'Try Arcade Hub for a playful stop, Asian County for a low-key dinner, '
-        'or Smart Gym if you want something active nearby. Want me to narrow it '
-        'by distance, food, or mood?';
-  }
-}
-
-class UserTasteProfile {
-  String? placeType;
-  String? budget;
-  String? atmosphere;
-
-  void learnFrom(String text) {
-    final lower = text.toLowerCase();
-
-    if (lower.contains('food') ||
-        lower.contains('dinner') ||
-        lower.contains('coffee') ||
-        lower.contains('restaurant')) {
-      placeType = 'food and drink spots';
-    } else if (lower.contains('gym') || lower.contains('active')) {
-      placeType = 'active places';
-    } else if (lower.contains('hidden') || lower.contains('local')) {
-      placeType = 'hidden gems';
-    }
-
-    if (lower.contains('cheap') ||
-        lower.contains('budget') ||
-        lower.contains('affordable')) {
-      budget = 'low budget';
-    } else if (lower.contains('fancy') || lower.contains('premium')) {
-      budget = 'premium budget';
-    }
-
-    if (lower.contains('quiet') || lower.contains('calm')) {
-      atmosphere = 'quiet';
-    } else if (lower.contains('cozy') || lower.contains('romantic')) {
-      atmosphere = 'cozy';
-    } else if (lower.contains('fun') || lower.contains('lively')) {
-      atmosphere = 'lively';
-    }
-  }
-
-  String get summary {
-    return [
-      if (placeType != null) 'preferred place type: $placeType',
-      if (budget != null) 'budget: $budget',
-      if (atmosphere != null) 'atmosphere: $atmosphere',
-      if (placeType == null && budget == null && atmosphere == null)
-        'no strong preferences learned yet',
-    ].join(', ');
   }
 }
 

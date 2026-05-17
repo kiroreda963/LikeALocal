@@ -158,189 +158,188 @@ class _MapPageState extends State<MapPage> {
     return PlaceService.calculateDistance(origin, placeLatLng);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<PlacesProvider>(
-      builder: (context, placesProvider, _) {
-        final places = placesProvider.places;
+ @override
+Widget build(BuildContext context) {
+  return Consumer<PlacesProvider>(
+    builder: (context, placesProvider, _) {
+      final places = placesProvider.places;
 
-        final filteredPlaces = places.where((place) {
-          final matchesQuery =
-              _query.isEmpty ||
-              place.placeName.toLowerCase().contains(_query.toLowerCase()) ||
-              place.category.toLowerCase().contains(_query.toLowerCase());
-          final matchesCategory =
-              _selectedCategoryFilter == null ||
-              place.category.toLowerCase() ==
-                  _selectedCategoryFilter?.toLowerCase();
-          return matchesQuery && matchesCategory;
-        }).toList();
+      final filteredPlaces = places.where((place) {
+        final matchesQuery =
+            _query.isEmpty ||
+            place.placeName.toLowerCase().contains(_query.toLowerCase()) ||
+            place.category.toLowerCase().contains(_query.toLowerCase());
+        final matchesCategory =
+            _selectedCategoryFilter == null ||
+            place.category == _selectedCategoryFilter;
+        return matchesQuery && matchesCategory;
+      }).toList();
 
-        final selectedPlace = _selectedPlace;
+      final selectedPlace = _selectedPlace;
 
-        return Scaffold(
-          body: Stack(
-            children: [
-              // Map layer
-              FlutterMap(
-                mapController: _mapController,
-                options: MapOptions(
-                  initialCenter: selectedPlace != null
-                      ? LatLng(selectedPlace.latitude, selectedPlace.longitude)
-                      : _newCairo,
-                  initialZoom: 15.2,
-                  interactionOptions: const InteractionOptions(
-                    flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-                  ),
+      return Scaffold(
+        body: Stack(
+          children: [
+            // Map layer
+            FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: selectedPlace != null
+                    ? LatLng(selectedPlace.latitude, selectedPlace.longitude)
+                    : _newCairo,
+                initialZoom: 15.2,
+                interactionOptions: const InteractionOptions(
+                  flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                 ),
-                children: [
-                  TileLayer(
-                    urlTemplate:
-                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.example.likealocal',
-                    tileBuilder: (context, tileWidget, tile) {
-                      return ColorFiltered(
-                        colorFilter: const ColorFilter.matrix([
-                          0.62,
-                          0.12,
-                          0.06,
-                          0,
-                          70,
-                          0.08,
-                          1.08,
-                          0.08,
-                          0,
-                          52,
-                          0.04,
-                          0.12,
-                          0.68,
-                          0,
-                          70,
-                          0,
-                          0,
-                          0,
-                          1,
-                          0,
-                        ]),
-                        child: tileWidget,
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate:
+                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.example.likealocal',
+                  tileBuilder: (context, tileWidget, tile) {
+                    return ColorFiltered(
+                      colorFilter: const ColorFilter.matrix([
+                        0.62,
+                        0.12,
+                        0.06,
+                        0,
+                        70,
+                        0.08,
+                        1.08,
+                        0.08,
+                        0,
+                        52,
+                        0.04,
+                        0.12,
+                        0.68,
+                        0,
+                        70,
+                        0,
+                        0,
+                        0,
+                        1,
+                        0,
+                      ]),
+                      child: tileWidget,
+                    );
+                  },
+                ),
+                MarkerLayer(
+                  markers: [
+                    if (_myLocation != null)
+                      Marker(
+                        point: _myLocation!,
+                        width: 24,
+                        height: 24,
+                        child: const _CurrentLocationMarker(),
+                      ),
+                    ...filteredPlaces.map((place) {
+                      final placeLatLng = LatLng(
+                        place.latitude,
+                        place.longitude,
                       );
+                      return Marker(
+                        point: placeLatLng,
+                        width: 155,
+                        height: 56,
+                        alignment: Alignment.centerLeft,
+                        child: _PlaceMarkerFirebase(
+                          place: place,
+                          selected: place.id == selectedPlace?.id,
+                          onTap: () => _selectPlace(place),
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ],
+            ),
+
+            // Top UI Controls
+            SafeArea(
+              bottom: false,
+              child: Column(
+                children: [
+                  const SizedBox(height: 12),
+                  // Search Bar
+                  _MapSearchBar(
+                    controller: _searchController,
+                    onChanged: (value) => setState(() => _query = value),
+                    onClear: () {
+                      _searchController.clear();
+                      setState(() => _query = '');
                     },
                   ),
-                  MarkerLayer(
-                    markers: [
-                      if (_myLocation != null)
-                        Marker(
-                          point: _myLocation!,
-                          width: 24,
-                          height: 24,
-                          child: const _CurrentLocationMarker(),
-                        ),
-                      ...filteredPlaces.map((place) {
-                        final placeLatLng = LatLng(
-                          place.latitude,
-                          place.longitude,
-                        );
-                        return Marker(
-                          point: placeLatLng,
-                          width: 155,
-                          height: 56,
-                          alignment: Alignment.centerLeft,
-                          child: _PlaceMarkerFirebase(
-                            place: place,
-                            selected: place.id == selectedPlace?.id,
-                            onTap: () => _selectPlace(place),
-                          ),
-                        );
-                      }),
-                    ],
+                  const SizedBox(height: 12),
+                  // Category Filters
+                  _CategoryFiltersFirebase(
+                    selected: _selectedCategoryFilter,
+                    onSelected: (category) {
+                      setState(() {
+                        _selectedCategoryFilter =
+                            _selectedCategoryFilter == category ? null : category;
+                        final visible = filteredPlaces;
+                        if (visible.isNotEmpty) {
+                          _selectPlace(visible.first);
+                        } else {
+                          _selectedPlace = null;
+                        }
+                      });
+                    },
                   ),
+                  // Search Results or Category Results
+                  if (_query.isNotEmpty || _selectedCategoryFilter != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: _SearchResultsFirebase(
+                        places: filteredPlaces,
+                        onTap: _selectPlace,
+                        filterType: _selectedCategoryFilter ?? _query,
+                      ),
+                    ),
                 ],
               ),
+            ),
 
-              // Top UI Controls
-              SafeArea(
-                bottom: false,
-                child: Column(
-                  children: [
-                    const SizedBox(height: 12),
-                    // Search Bar
-                    _MapSearchBar(
-                      controller: _searchController,
-                      onChanged: (value) => setState(() => _query = value),
-                      onClear: () {
-                        _searchController.clear();
-                        setState(() => _query = '');
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    // Category Filters
-                    _CategoryFiltersFirebase(
-                      selected: _selectedCategoryFilter,
-                      onSelected: (category) {
-                        setState(() {
-                          _selectedCategoryFilter =
-                              _selectedCategoryFilter == category
-                              ? null
-                              : category;
-                          final visible = filteredPlaces;
-                          if (visible.isNotEmpty) {
-                            _selectPlace(visible.first);
-                          }
-                        });
-                      },
-                    ),
-                    // Search Results
-                    if (_query.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: _SearchResultsFirebase(
-                          places: filteredPlaces,
-                          onTap: _selectPlace,
-                        ),
+            // Bottom Controls
+            SafeArea(
+              top: false,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 24, bottom: 12),
+                      child: _MapControlButton(
+                        icon: Icons.my_location,
+                        onPressed: () {
+                          final target = _myLocation ?? _newCairo;
+                          _mapController.move(target, 15.5);
+                        },
                       ),
-                  ],
-                ),
+                    ),
+                  ),
+                  if (selectedPlace != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                      child: _SelectedPlaceSheetFirebase(
+                        place: selectedPlace,
+                        distanceKm: _distanceKm(selectedPlace),
+                        onReviews: () => _showReviews(selectedPlace),
+                        onChat: () => _showChatDialog(selectedPlace),
+                      ),
+                    ),
+                ],
               ),
-
-              // Bottom Controls
-              SafeArea(
-                top: false,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 24, bottom: 12),
-                        child: _MapControlButton(
-                          icon: Icons.my_location,
-                          onPressed: () {
-                            final target = _myLocation ?? _newCairo;
-                            _mapController.move(target, 15.5);
-                          },
-                        ),
-                      ),
-                    ),
-                    if (selectedPlace != null)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                        child: _SelectedPlaceSheetFirebase(
-                          place: selectedPlace,
-                          distanceKm: _distanceKm(selectedPlace),
-                          onReviews: () => _showReviews(selectedPlace),
-                          onChat: () => _showChatDialog(selectedPlace),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
   void _showReviews(Place place) async {
     final reviews = await context.read<PlacesProvider>().fetchReviews(place.id);
     if (!mounted) return;
@@ -1048,7 +1047,6 @@ class _MapSearchBar extends StatelessWidget {
     );
   }
 }
-
 class _CategoryFiltersFirebase extends StatelessWidget {
   final String? selected;
   final ValueChanged<String> onSelected;
@@ -1060,7 +1058,14 @@ class _CategoryFiltersFirebase extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final categories = ['Food', 'Gym', 'Tourist', 'Hidden Gems'];
+    final categories = [
+      'Historical Places',
+      'Restaurants & Cafes',
+      'Shopping',
+      'Entertainment',
+      'Nightlife',
+      'Beaches & Resorts',
+    ];
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -1076,7 +1081,7 @@ class _CategoryFiltersFirebase extends StatelessWidget {
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 height: 34,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: active ? const Color(0xFF143C23) : Colors.white,
@@ -1096,11 +1101,12 @@ class _CategoryFiltersFirebase extends StatelessWidget {
                   ],
                 ),
                 child: Text(
-                  category.toUpperCase(),
+                  category,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: active ? Colors.white : Colors.black87,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -1110,22 +1116,37 @@ class _CategoryFiltersFirebase extends StatelessWidget {
       ),
     );
   }
-}
-
-class _SearchResultsFirebase extends StatelessWidget {
+}class _SearchResultsFirebase extends StatelessWidget {
   final List<Place> places;
   final ValueChanged<Place> onTap;
+  final String? filterType; // ✅ Add this parameter
 
-  const _SearchResultsFirebase({required this.places, required this.onTap});
+  const _SearchResultsFirebase({
+    required this.places,
+    required this.onTap,
+    this.filterType, // ✅ Add this here
+  });
 
   @override
   Widget build(BuildContext context) {
+    // Determine header text
+    String headerText = 'Search Results';
+    if (filterType != null &&
+        (filterType!.contains('Historical') ||
+            filterType!.contains('Restaurant') ||
+            filterType!.contains('Shopping') ||
+            filterType!.contains('Entertainment') ||
+            filterType!.contains('Nightlife') ||
+            filterType!.contains('Beaches'))) {
+      headerText = filterType!;
+    }
+
     return Center(
       child: Container(
         width: 280,
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 12),
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.35,
+          maxHeight: MediaQuery.of(context).size.height * 0.5,
         ),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -1138,85 +1159,108 @@ class _SearchResultsFirebase extends StatelessWidget {
             ),
           ],
         ),
-        child: places.isEmpty
-            ? const Padding(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header with category name
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(
+                headerText,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black87,
+                ),
+              ),
+            ),
+            const Divider(height: 8),
+            // Results list
+            if (places.isEmpty)
+              const Padding(
                 padding: EdgeInsets.all(16),
                 child: Text(
                   'No places found',
                   style: TextStyle(color: Colors.black54, fontSize: 14),
                 ),
               )
-            : ListView.builder(
-                padding: EdgeInsets.zero,
-                itemCount: places.length,
-                itemBuilder: (context, index) {
-                  final place = places[index];
-                  return ListTile(
-                    dense: false,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 4,
-                    ),
-                    leading: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF143C23).withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
+            else
+              Expanded(
+                child: ListView.builder(
+                  padding: EdgeInsets.zero,
+                  itemCount: places.length,
+                  itemBuilder: (context, index) {
+                    final place = places[index];
+                    return ListTile(
+                      dense: false,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
                       ),
-                      child: Icon(
-                        PlaceService.getIconByName(place.placeName),
-                        color: const Color(0xFF143C23),
-                        size: 18,
+                      leading: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF143C23)
+                              .withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          PlaceService.getIconByName(place.placeName),
+                          color: const Color(0xFF143C23),
+                          size: 18,
+                        ),
                       ),
-                    ),
-                    title: Text(
-                      place.placeName,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
+                      title: Text(
+                        place.placeName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
                       ),
-                    ),
-                    subtitle: Text(
-                      place.category,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Colors.black54,
+                      subtitle: Text(
+                        place.category,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.black54,
+                        ),
                       ),
-                    ),
-                    trailing: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE7FF00),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.star, color: Colors.black, size: 12),
-                          const SizedBox(width: 2),
-                          Text(
-                            place.rating.toStringAsFixed(1),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 11,
+                      trailing: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE7FF00),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.star,
+                                color: Colors.black, size: 12),
+                            const SizedBox(width: 2),
+                            Text(
+                              place.rating.toStringAsFixed(1),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 11,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    onTap: () => onTap(place),
-                  );
-                },
+                      onTap: () => onTap(place),
+                    );
+                  },
+                ),
               ),
+          ],
+        ),
       ),
     );
   }
 }
-
 class _PlaceMarkerFirebase extends StatelessWidget {
   final Place place;
   final bool selected;
@@ -1258,6 +1302,7 @@ class _PlaceMarkerFirebase extends StatelessWidget {
             Transform.translate(
               offset: const Offset(-3, 0),
               child: Container(
+                constraints: const BoxConstraints(maxWidth: 100), // FIX: Add constraint
                 height: 27,
                 padding: const EdgeInsets.only(left: 12, right: 8),
                 decoration: BoxDecoration(
@@ -1267,10 +1312,11 @@ class _PlaceMarkerFirebase extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Flexible(
+                    Flexible( // Already using Flexible, but ensure it works
                       child: Text(
                         place.placeName,
                         overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                         style: const TextStyle(
                           color: Color(0xFF219357),
                           fontSize: 10,
@@ -1289,6 +1335,7 @@ class _PlaceMarkerFirebase extends StatelessWidget {
                         borderRadius: BorderRadius.circular(7),
                       ),
                       child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
                             place.rating.toStringAsFixed(1),
@@ -1311,7 +1358,6 @@ class _PlaceMarkerFirebase extends StatelessWidget {
     );
   }
 }
-
 class _SelectedPlaceSheetFirebase extends StatefulWidget {
   final Place place;
   final double distanceKm;

@@ -107,7 +107,8 @@ final ConversationModel aiConversation = ConversationModel(
   participantId: 'ai',
   participantName: 'AI Assistant',
   participantAvatar: '', // use icon fallback
-  lastMessage: 'Would you like a fado dinner recommendation?',
+  lastMessage:
+      'Hi! I can suggest spots based on your favorite places and places you added. What are you in the mood for?',
   lastMessageTime: Timestamp.now(),
   isOnline: true,
   isAI: true,
