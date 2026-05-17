@@ -260,6 +260,15 @@ class ProfilePage extends StatelessWidget {
                   title: "My Places",
                   page: const SavedPlacesPage(),
                 ),
+
+                _divider(),
+
+                _buildTile(
+                  context,
+                  icon: Icons.workspace_premium,
+                  title: "Subscription",
+                  page: const SubscriptionPage(),
+                ),
               ],
             ),
           ),

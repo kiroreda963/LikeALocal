@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../Models/place_model.dart';
 import '../../Models/user_model.dart' as user_model;
 import '../../Models/conversation_model.dart';
@@ -29,6 +30,15 @@ class _ExplorePageState extends State<ExplorePage> {
 
   void _openOnMap(Place place) {
     context.read<PlacesProvider>().openPlaceOnMap(place);
+  }
+
+  Future<void> _launchURL(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
+      throw 'Could not launch $url';
+    }
   }
 
   Future<Map<String, String>> _fetchUserMeta(String userId) async {
@@ -133,89 +143,7 @@ class _ExplorePageState extends State<ExplorePage> {
     );
   }
 
-  Future<Map<String, String>> _fetchUserMeta(String userId) async {
-    final userDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .get();
-    final data = userDoc.data() ?? {};
-    return {
-      'name': (data['name'] as String?)?.trim() ?? 'User',
-      'avatar': (data['photoUrl'] as String?) ?? '',
-    };
-  }
 
-  Future<void> _openChatWithAuthor(Place place) async {
-    final firebaseUser = FirebaseAuth.instance.currentUser;
-    if (firebaseUser == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please log in to chat with the post owner'),
-        ),
-      );
-      return;
-    }
-
-    final currentUser =
-        await context.read<local_auth.AuthProvider>().getAllUserInfo() ??
-        user_model.User(
-          uid: firebaseUser.uid,
-          name: firebaseUser.displayName ?? 'You',
-          email: firebaseUser.email ?? '',
-          phoneNumber: '',
-          photoUrl: firebaseUser.photoURL,
-        );
-
-    if (place.authorId.isEmpty || place.authorId == currentUser.uid) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Unable to open chat with this post owner'),
-        ),
-      );
-      return;
-    }
-
-    final authorMeta = await _fetchUserMeta(place.authorId);
-
-    final service = MessagingService();
-    final conversationId = await service.createOrGetConversation(
-      currentUserId: currentUser.uid,
-      otherUserId: place.authorId,
-      currentUserName: currentUser.name.isNotEmpty ? currentUser.name : 'You',
-      otherUserName: authorMeta['name'] ?? 'User',
-      currentUserAvatar: currentUser.photoUrl ?? '',
-      otherUserAvatar: authorMeta['avatar'] ?? '',
-      otherUserOnline: true,
-    );
-
-    final convDoc = await FirebaseFirestore.instance
-        .collection('conversations')
-        .doc(conversationId)
-        .get();
-
-    if (!convDoc.exists) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open chat conversation')),
-      );
-      return;
-    }
-
-    final conversation = ConversationModel.fromDoc(convDoc, currentUser.uid);
-    if (!mounted) return;
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ChatScreen(
-          conversation: conversation,
-          currentUserId: currentUser.uid,
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -313,14 +241,15 @@ class _ExplorePageState extends State<ExplorePage> {
                 itemBuilder: (context, index) {
                   final place = provider.filteredPlaces[index];
                   return _buildPlaceCard(
+                    place: place,
                     name: place.placeName,
                     description: place.description,
                     rating: place.rating.toString(),
                     imageUrl: place.imageUrl,
-                      longitude: place.longitude,
-                      latitude: place.latitude,
+                    longitude: place.longitude,
+                    latitude: place.latitude,
                     locationUrl: 'https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}',
-                                      );
+                  );
                 },
               ),
             ],
@@ -399,10 +328,10 @@ class _ExplorePageState extends State<ExplorePage> {
           const SizedBox(height: 12),
           Row(
             children: [
-              _buildCardButton('Look \nOn maps', Icons.location_on_outlined, () => _launchURL(locationUrl)),
+              _buildCardButton('Look \nOn maps', Icons.location_on_outlined, () => _openOnMap(place)),
               const SizedBox(width: 8),
-             _buildCardButton("Chat with Post Owner", Icons.chat_bubble_outline, () => ("gg") )
-              ],
+              _buildCardButton('Chat with Post Owner', Icons.chat_bubble_outline, () => _openChatWithAuthor(place)),
+            ],
           )],
               ),
     );
