@@ -103,7 +103,10 @@ class UserPlaceContext {
 }
 
 class AiRecommendationService {
- 
+  static const _apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
+  static const _model = 'openrouter/free';
+  static const _apiKey =
+      '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';
 
   Future<String> recommend({
     required String userMessage,
@@ -115,7 +118,8 @@ class AiRecommendationService {
         .map((entry) => '${entry.role}: ${entry.text}')
         .join('\n');
 
-    final prompt = '''
+    final prompt =
+        '''
 You are LikeALocal's AI Assistant. Recommend local places in a concise,
 friendly chat style (2-4 short paragraphs max).
 
@@ -165,8 +169,9 @@ and end with one follow-up question.
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final content =
-            data['choices']?[0]?['message']?['content']?.toString().trim();
+        final content = data['choices']?[0]?['message']?['content']
+            ?.toString()
+            .trim();
         if (content != null && content.isNotEmpty) return content;
       }
     } catch (_) {
@@ -199,17 +204,15 @@ and end with one follow-up question.
       final source = placeContext.favorites.any((p) => p.id == place.id)
           ? 'one of your favorites'
           : placeContext.myPlaces.any((p) => p.id == place.id)
-              ? 'a place you added'
-              : 'in our catalog';
+          ? 'a place you added'
+          : 'in our catalog';
       buffer.writeln(
         '${i + 1}. ${place.placeName} ($source) — ${place.category}, '
         '${place.priceRange}. ${place.description}',
       );
     }
 
-    buffer.write(
-      '\nWant me to narrow these by distance, food type, or mood?',
-    );
+    buffer.write('\nWant me to narrow these by distance, food type, or mood?');
     return buffer.toString();
   }
 }
