@@ -106,7 +106,13 @@ class MessagingService {
     return conversationId;
   }
 
-  // ── AI conversation messages (stored under 'ai_assistant' convo) ──────────
+  // ── AI conversation messages (stored under ai_{userId}) ───────────────────
+
+  static const aiSenderId = 'ai';
+  static const aiWelcomeMessage =
+      'Hi! I can suggest spots based on your favorite places and places you added. What are you in the mood for?';
+
+  String aiConversationId(String userId) => 'ai_$userId';
 
   Stream<List<MessageModel>> aiMessagesStream(String userId) {
     final convId = 'ai_$userId';
@@ -149,5 +155,18 @@ class MessagingService {
     });
 
     await batch.commit();
+  }
+
+  /// Seeds the welcome message when the user opens AI chat for the first time.
+  Future<void> ensureAiWelcomeMessage(String userId) async {
+    final convId = aiConversationId(userId);
+    final existing = await _messages(convId).limit(1).get();
+    if (existing.docs.isNotEmpty) return;
+
+    await sendAiMessage(
+      userId: userId,
+      senderId: aiSenderId,
+      text: aiWelcomeMessage,
+    );
   }
 }
