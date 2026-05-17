@@ -4,6 +4,7 @@ import '../../Providers/PlaceProvider.dart';
 import '../widgets/top_bar.dart';
 import '../widgets/bottom_nav_bar.dart';
 import 'explore_page.dart';
+import 'explore_page.dart';
 import 'home_page.dart';
 import 'map_page.dart';
 
@@ -33,6 +34,7 @@ class _MainShellState extends State<MainShell> {
     ExplorePage(),
     MapPage(),
     Center(child: Text('Profile')),
+    Center(child: Text('Profile')),
   ];
 
   @override
@@ -61,6 +63,21 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F8F8),
+      // ── Isolated Top Bar ──
+      appBar: _currentIndex == 1
+          ? null
+          : _currentIndex == 2
+          ? const MapTopBar()
+          : TopBar(userName: 'Kirolos'),
+      // ── Page Body ──
+      body: IndexedStack(index: _currentIndex, children: _pages),
+      // ── Isolated Bottom Nav Bar ──
+      bottomNavigationBar: BottomNavBar(
+        currentIndex: _currentIndex,
+        onTap: (index) => setState(() => _currentIndex = index),
+      ),
     return Scaffold(
       backgroundColor: const Color(0xFFF8F8F8),
       // ── Isolated Top Bar ──

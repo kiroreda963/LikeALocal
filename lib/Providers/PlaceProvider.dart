@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 import 'dart:math';
+import 'dart:async';
+import 'dart:math';
 import '../Models/place_model.dart';
 import '../Models/review_model.dart';
 import '../services/ai_recommendation_service.dart';
@@ -12,6 +14,10 @@ class PlacesProvider with ChangeNotifier {
   List<Place> _hiddenGems = [];
   Map<String, List<Review>> _reviewsCache = {};
   final Map<String, String> _userNameCache = {};
+
+  // 🔄 Stream subscriptions
+  StreamSubscription<QuerySnapshot>? _placesSubscription;
+  StreamSubscription<QuerySnapshot>? _hiddenGemsSubscription;
 
   // 🔄 Stream subscriptions
   StreamSubscription<QuerySnapshot>? _placesSubscription;
@@ -130,7 +136,58 @@ class PlacesProvider with ChangeNotifier {
     _isLoading = true;
     _error = null;
     notifyListeners();
+    _placesSubscription = _firestore
+        .collection('places')
+        .snapshots()
+        .listen(
+          (snapshot) {
+            try {
+              _places = snapshot.docs
+                  .map((doc) => Place.fromMap(doc.data(), doc.id))
+                  .toList();
 
+              // Sort by rating (highest first)
+              _places.sort((a, b) {
+                return b.rating.compareTo(a.rating);
+              });
+
+              _isLoading = false;
+              _error = null;
+              notifyListeners(); // Rebuild UI with new data
+            } catch (e) {
+              _error = e.toString();
+              _isLoading = false;
+              notifyListeners();
+            }
+          },
+          onError: (error) {
+            _error = error.toString();
+            _isLoading = false;
+            notifyListeners();
+          },
+        );
+  }
+
+  // ============================================
+  // 🎲 REAL-TIME HIDDEN GEMS WITH STREAMS
+  // ============================================
+  void fetchHiddenGems() {
+    // Cancel existing subscription
+    _hiddenGemsSubscription?.cancel();
+
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    _hiddenGemsSubscription = _firestore
+        .collection('places')
+        .snapshots()
+        .listen(
+          (snapshot) {
+            try {
+              _hiddenGems = snapshot.docs
+                  .map((doc) => Place.fromMap(doc.data(), doc.id))
+                  .toList();
     _hiddenGemsSubscription = _firestore
         .collection('places')
         .snapshots()
@@ -143,7 +200,27 @@ class PlacesProvider with ChangeNotifier {
 
               // Shuffle randomly
               _hiddenGems.shuffle(Random());
+              // Shuffle randomly
+              _hiddenGems.shuffle(Random());
 
+              // Take only 5 places
+              _hiddenGems = _hiddenGems.take(5).toList();
+
+              _isLoading = false;
+              _error = null;
+              notifyListeners();
+            } catch (e) {
+              _error = e.toString();
+              _isLoading = false;
+              notifyListeners();
+            }
+          },
+          onError: (error) {
+            _error = error.toString();
+            _isLoading = false;
+            notifyListeners();
+          },
+        );
               // Take only 5 places
               _hiddenGems = _hiddenGems.take(5).toList();
 
@@ -169,6 +246,7 @@ class PlacesProvider with ChangeNotifier {
     try {
       await _firestore.collection('places').add(place.toMap());
       // No need to call fetchPlaces() - stream will automatically update
+      // No need to call fetchPlaces() - stream will automatically update
     } catch (e) {
       _error = e.toString();
       notifyListeners();
@@ -188,6 +266,7 @@ class PlacesProvider with ChangeNotifier {
   void setCategory(String category) {
     _selectedCategory = category;
     notifyListeners();
+    notifyListeners();
   }
 
   // 🔍 Get single place by id
@@ -205,6 +284,7 @@ class PlacesProvider with ChangeNotifier {
   }
 
   String _selectedPrice = 'All';
+  String _selectedPrice = 'All';
   String get selectedPrice => _selectedPrice;
 
   void setPriceRange(String price) {
@@ -212,6 +292,17 @@ class PlacesProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  // ❤️ Add favorite
+  Future<void> addFavorite(String userId, String placeId) async {
+    try {
+      final userDoc = FirebaseFirestore.instance.collection('users').doc(userId);
+      await userDoc.update({
+        'favoredPlaces': FieldValue.arrayUnion([placeId])
+      });
+    } catch (e) {
+      debugPrint('Error adding favorite: $e');
+    }
+  }
   // ❤️ Add favorite
   Future<void> addFavorite(String userId, String placeId) async {
     try {
@@ -235,7 +326,35 @@ class PlacesProvider with ChangeNotifier {
       debugPrint('Error removing favorite: $e');
     }
   }
+  // 🚫 Remove favorite
+  Future<void> removeFavorite(String userId, String placeId) async {
+    try {
+      final userDoc = FirebaseFirestore.instance.collection('users').doc(userId);
+      await userDoc.update({
+        'favoredPlaces': FieldValue.arrayRemove([placeId])
+      });
+    } catch (e) {
+      debugPrint('Error removing favorite: $e');
+    }
+  }
 
+  // ✅ Check if favorited
+  Future<bool> isFavorited(String userId, String placeId) async {
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+
+      if (!userDoc.exists) return false;
+
+      final favoredPlaces = List<String>.from(userDoc['favoredPlaces'] ?? []);
+      return favoredPlaces.contains(placeId);
+    } catch (e) {
+      debugPrint('Error checking favorite: $e');
+      return false;
+    }
+  }
   // ✅ Check if favorited
   Future<bool> isFavorited(String userId, String placeId) async {
     try {
@@ -351,6 +470,13 @@ class PlacesProvider with ChangeNotifier {
         'rating': rating,
         'createdAt': FieldValue.serverTimestamp(),
       });
+        'userId': userId,
+        'placeId': placeId,
+        'userName': userName,
+        'reviewText': reviewText,
+        'rating': rating,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
 
       // Update place rating and review count
       final placeDoc = await placeRef.get();
@@ -359,6 +485,7 @@ class PlacesProvider with ChangeNotifier {
         final currentRating = placeDoc['rating'] ?? 0.0;
 
         // Calculate new average rating
+        final newRating = ((currentRating * currentReviewCount) + rating) /
         final newRating = ((currentRating * currentReviewCount) + rating) /
             (currentReviewCount + 1);
 
@@ -377,6 +504,7 @@ class PlacesProvider with ChangeNotifier {
     }
   }
 
+  // 🔁 Add or update a user's review for a place
   // 🔁 Add or update a user's review for a place
   Future<void> addOrUpdateReview({
     required String userId,
@@ -417,6 +545,7 @@ class PlacesProvider with ChangeNotifier {
       }
 
       // Recalculate rating and reviewCount from all reviews
+      // Recalculate rating and reviewCount from all reviews
       final snapshot = await reviewsRef.get();
       final count = snapshot.docs.length;
       double sum = 0.0;
@@ -430,7 +559,10 @@ class PlacesProvider with ChangeNotifier {
       await placeRef.update({'rating': newRating, 'reviewCount': count});
 
       // Clear cache
+      // Clear cache
       _reviewsCache.remove(placeId);
+      
+      // Update local place if it exists
       
       // Update local place if it exists
       final placeIndex = _places.indexWhere((p) => p.id == placeId);
@@ -442,12 +574,15 @@ class PlacesProvider with ChangeNotifier {
       }
       
       notifyListeners();
+      
+      notifyListeners();
     } catch (e) {
       _error = e.toString();
       notifyListeners();
     }
   }
 
+  // ❌ Delete a review by id
   // ❌ Delete a review by id
   Future<void> deleteReview({
     required String placeId,
@@ -458,6 +593,7 @@ class PlacesProvider with ChangeNotifier {
           .collection('places')
           .doc(placeId)
           .collection('reviews');
+      
       
       await reviewsRef.doc(reviewId).delete();
 
@@ -475,7 +611,10 @@ class PlacesProvider with ChangeNotifier {
       await placeRef.update({'rating': newRating, 'reviewCount': count});
 
       // Clear cache
+      // Clear cache
       _reviewsCache.remove(placeId);
+      
+      // Update local place if it exists
       
       // Update local place if it exists
       final placeIndex = _places.indexWhere((p) => p.id == placeId);
@@ -487,12 +626,15 @@ class PlacesProvider with ChangeNotifier {
       }
       
       notifyListeners();
+      
+      notifyListeners();
     } catch (e) {
       _error = e.toString();
       notifyListeners();
     }
   }
 
+  // 🔎 Get current user's review for a place
   // 🔎 Get current user's review for a place
   Future<Review?> getUserReviewForPlace(String userId, String placeId) async {
     try {
@@ -504,7 +646,9 @@ class PlacesProvider with ChangeNotifier {
           .limit(1)
           .get();
       
+      
       if (snapshot.docs.isEmpty) return null;
+      
       
       final doc = snapshot.docs.first;
       return Review.fromMap(doc.data(), doc.id);
@@ -533,6 +677,7 @@ class PlacesProvider with ChangeNotifier {
         var rev = Review.fromMap(doc.data(), doc.id);
 
         // If username missing or placeholder, try to resolve from users collection
+        // If username missing or placeholder, try to resolve from users collection
         final lowerName = rev.userName.trim().toLowerCase();
         if (rev.userName.isEmpty ||
             lowerName.contains('anon') ||
@@ -550,6 +695,8 @@ class PlacesProvider with ChangeNotifier {
               createdAt: rev.createdAt,
             );
           } else if (uid.isNotEmpty) {
+            final userDoc =
+                await _firestore.collection('users').doc(uid).get();
             final userDoc =
                 await _firestore.collection('users').doc(uid).get();
             String resolvedName = '';
@@ -596,6 +743,14 @@ class PlacesProvider with ChangeNotifier {
       return [];
     }
   }
+
+  @override
+  void dispose() {
+    _placesSubscription?.cancel();
+    _hiddenGemsSubscription?.cancel();
+    super.dispose();
+  }
+}
 
   @override
   void dispose() {
