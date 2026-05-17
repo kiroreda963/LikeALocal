@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
+import '../../Models/place_model.dart';
+import '../../Providers/PlaceProvider.dart';
 
 class MessageBubble extends StatelessWidget {
   final String text;
@@ -7,6 +10,7 @@ class MessageBubble extends StatelessWidget {
   final Timestamp timestamp;
   final String? senderAvatar;
   final bool showAvatar;
+  final String? placeId;
 
   const MessageBubble({
     super.key,
@@ -15,6 +19,7 @@ class MessageBubble extends StatelessWidget {
     required this.timestamp,
     this.senderAvatar,
     this.showAvatar = true,
+    this.placeId,
   });
 
   String _formatTime(Timestamp ts) {
@@ -65,14 +70,16 @@ class MessageBubble extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: Text(
-                  text,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: isMine ? Colors.white : Colors.black87,
-                    height: 1.4,
-                  ),
-                ),
+                child: placeId != null
+                    ? _buildPlaceCard(context, placeId!)
+                    : Text(
+                        text,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: isMine ? Colors.white : Colors.black87,
+                          height: 1.4,
+                        ),
+                      ),
               ),
               const SizedBox(height: 3),
               Text(
@@ -87,6 +94,81 @@ class MessageBubble extends StatelessWidget {
           if (isMine) const SizedBox(width: 4),
         ],
       ),
+    );
+  }
+
+  Widget _buildPlaceCard(BuildContext context, String id) {
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance.collection('places').doc(id).get(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const SizedBox(
+            width: 100,
+            height: 50,
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Colors.grey)),
+          );
+        }
+        final data = snapshot.data!.data() as Map<String, dynamic>?;
+        if (data == null) return const Text('Place not found');
+
+        final name = data['placeName'] ?? 'Unknown';
+        final category = data['category'] ?? '';
+        final rating = (data['rating'] ?? 0.0).toDouble();
+
+        return InkWell(
+          onTap: () {
+            final place = Place.fromMap(data, id);
+            Provider.of<PlacesProvider>(context, listen: false).openPlaceOnMap(place);
+            Navigator.popUntil(context, (route) => route.isFirst); // Go back to main shell
+          },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.location_on, color: Colors.red, size: 16),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      name,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isMine ? Colors.white : Colors.black,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                category,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isMine ? Colors.white70 : Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  const Icon(Icons.star, color: Colors.amber, size: 14),
+                  Text(
+                    ' $rating',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isMine ? Colors.white70 : Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Tap to view on map',
+                style: TextStyle(fontSize: 10, color: Colors.blue),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

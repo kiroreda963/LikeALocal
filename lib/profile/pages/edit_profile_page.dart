@@ -12,6 +12,7 @@ class EditProfilePage extends StatefulWidget {
 class _EditProfilePageState extends State<EditProfilePage> {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController bioController = TextEditingController();
+  final TextEditingController photoController = TextEditingController();
 
   bool isLoading = false;
 
@@ -37,6 +38,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
         nameController.text = data?['name'] ?? '';
         bioController.text = data?['bio'] ?? '';
+        photoController.text = data?['photoUrl'] ?? '';
       }
     } catch (e) {
       debugPrint("Error loading user data: $e");
@@ -56,6 +58,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'name': nameController.text.trim(),
         'bio': bioController.text.trim(),
+        'photoUrl': photoController.text.trim(),
         'email': user.email,
       }, SetOptions(merge: true));
 
@@ -75,6 +78,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
     setState(() {
       isLoading = false;
     });
+  }
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    bioController.dispose();
+    photoController.dispose();
+    super.dispose();
   }
 
   @override
@@ -98,10 +109,15 @@ class _EditProfilePageState extends State<EditProfilePage> {
           children: [
             const SizedBox(height: 10),
 
-            const CircleAvatar(
+            CircleAvatar(
               radius: 50,
               backgroundColor: Colors.black12,
-              child: Icon(Icons.person, size: 55, color: Colors.black),
+              backgroundImage: photoController.text.isNotEmpty
+                  ? NetworkImage(photoController.text)
+                  : null,
+              child: photoController.text.isNotEmpty
+                  ? null
+                  : const Icon(Icons.person, size: 55, color: Colors.black),
             ),
 
             const SizedBox(height: 30),
@@ -138,6 +154,23 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   borderSide: BorderSide.none,
                 ),
               ),
+            ),
+
+            const SizedBox(height: 20),
+
+            TextField(
+              controller: photoController,
+              decoration: InputDecoration(
+                labelText: "Photo URL",
+                filled: true,
+                fillColor: Colors.white,
+
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+              onChanged: (_) => setState(() {}),
             ),
 
             const SizedBox(height: 30),

@@ -1,16 +1,25 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:async';
-import 'dart:math';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../Models/place_model.dart';
 import '../Models/review_model.dart';
+import '../services/ai_recommendation_service.dart';
 
 class PlacesProvider with ChangeNotifier {
+  static const String _placesCacheKey = 'cached_places';
+  static const String _hiddenGemsCacheKey = 'cached_hidden_gems';
+
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   List<Place> _places = [];
   List<Place> _hiddenGems = [];
   Map<String, List<Review>> _reviewsCache = {};
   final Map<String, String> _userNameCache = {};
+  bool _cacheLoaded = false;
 
   // 🔄 Stream subscriptions
   StreamSubscription<QuerySnapshot>? _placesSubscription;
@@ -26,6 +35,70 @@ class PlacesProvider with ChangeNotifier {
 
   String? _error;
   String? get error => _error;
+
+  Place? _mapFocusPlace;
+  Place? get mapFocusPlace => _mapFocusPlace;
+
+  Place? _mapShowReviewsPlace;
+  Place? get mapShowReviewsPlace => _mapShowReviewsPlace;
+
+  /// Switch to the map tab and focus this place (see MainShell + MapPage).
+  void openPlaceOnMap(Place place) {
+    _mapFocusPlace = place;
+    notifyListeners();
+  }
+
+  void openReviewsOnMap(Place place) {
+    _mapFocusPlace = place;
+    _mapShowReviewsPlace = place;
+    notifyListeners();
+  }
+
+  void clearShowReviewsPlace() {
+    if (_mapShowReviewsPlace == null) return;
+    _mapShowReviewsPlace = null;
+    notifyListeners();
+  }
+
+  void clearMapFocus() {
+    if (_mapFocusPlace == null) return;
+    _mapFocusPlace = null;
+    notifyListeners();
+  }
+
+  /// Top pick for the home featured card based on favorites and added places.
+  Future<Place?> getRecommendedPlace(String? userId) async {
+    if (_places.isEmpty) return null;
+
+    var favorites = <Place>[];
+    var myPlaces = <Place>[];
+
+    if (userId != null) {
+      favorites = await getFavorites(userId);
+      myPlaces = await getUserAddedPlaces(userId);
+    }
+
+    final placeContext = UserPlaceContext(
+      favorites: favorites,
+      myPlaces: myPlaces,
+      catalog: _places,
+    );
+
+    final ranked = placeContext.rankedCandidates(UserTasteProfile());
+    if (ranked.isEmpty) return _places.first;
+
+    if (placeContext.hasPersonalPlaces) {
+      final personalIds = {
+        ...favorites.map((p) => p.id),
+        ...myPlaces.map((p) => p.id),
+      };
+      for (final place in ranked) {
+        if (!personalIds.contains(place.id)) return place;
+      }
+    }
+
+    return ranked.first;
+  }
 
   // ============================================
   // 🔄 REAL-TIME PLACES FETCHING WITH STREAMS
@@ -53,6 +126,7 @@ class PlacesProvider with ChangeNotifier {
                 return b.rating.compareTo(a.rating);
               });
 
+              unawaited(_savePlacesCache());
               _isLoading = false;
               _error = null;
               notifyListeners(); // Rebuild UI with new data
@@ -74,7 +148,6 @@ class PlacesProvider with ChangeNotifier {
   // 🎲 REAL-TIME HIDDEN GEMS WITH STREAMS
   // ============================================
   void fetchHiddenGems() {
-    // Cancel existing subscription
     _hiddenGemsSubscription?.cancel();
 
     _isLoading = true;
@@ -91,12 +164,10 @@ class PlacesProvider with ChangeNotifier {
                   .map((doc) => Place.fromMap(doc.data(), doc.id))
                   .toList();
 
-              // Shuffle randomly
               _hiddenGems.shuffle(Random());
-
-              // Take only 5 places
               _hiddenGems = _hiddenGems.take(5).toList();
 
+              unawaited(_saveHiddenGemsCache());
               _isLoading = false;
               _error = null;
               notifyListeners();
@@ -118,7 +189,6 @@ class PlacesProvider with ChangeNotifier {
   Future<void> addPlace(Place place) async {
     try {
       await _firestore.collection('places').add(place.toMap());
-      // No need to call fetchPlaces() - stream will automatically update
     } catch (e) {
       _error = e.toString();
       notifyListeners();
@@ -162,13 +232,36 @@ class PlacesProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  DocumentReference _favoriteDoc(String userId, String placeId) {
+    final docId = 'favorite_${userId}_$placeId';
+    return _firestore.collection('favorites').doc(docId);
+  }
+
+  CollectionReference get _favoritesCollection =>
+      _firestore.collection('favorites');
+
+  Future<void> _syncFavoriteArrayWithUserDoc(
+    String userId,
+    String placeId,
+    bool add,
+  ) async {
+    final userDoc = _firestore.collection('users').doc(userId);
+    await userDoc.set({
+      'favoredPlaces': add
+          ? FieldValue.arrayUnion([placeId])
+          : FieldValue.arrayRemove([placeId]),
+    }, SetOptions(merge: true));
+  }
+
   // ❤️ Add favorite
   Future<void> addFavorite(String userId, String placeId) async {
     try {
-      final userDoc = FirebaseFirestore.instance.collection('users').doc(userId);
-      await userDoc.update({
-        'favoredPlaces': FieldValue.arrayUnion([placeId])
+      await _favoriteDoc(userId, placeId).set({
+        'userId': userId,
+        'placeId': placeId,
+        'createdAt': FieldValue.serverTimestamp(),
       });
+      await _syncFavoriteArrayWithUserDoc(userId, placeId, true);
     } catch (e) {
       debugPrint('Error adding favorite: $e');
     }
@@ -177,10 +270,8 @@ class PlacesProvider with ChangeNotifier {
   // 🚫 Remove favorite
   Future<void> removeFavorite(String userId, String placeId) async {
     try {
-      final userDoc = FirebaseFirestore.instance.collection('users').doc(userId);
-      await userDoc.update({
-        'favoredPlaces': FieldValue.arrayRemove([placeId])
-      });
+      await _favoriteDoc(userId, placeId).delete();
+      await _syncFavoriteArrayWithUserDoc(userId, placeId, false);
     } catch (e) {
       debugPrint('Error removing favorite: $e');
     }
@@ -189,14 +280,13 @@ class PlacesProvider with ChangeNotifier {
   // ✅ Check if favorited
   Future<bool> isFavorited(String userId, String placeId) async {
     try {
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .get();
+      final doc = await _favoriteDoc(userId, placeId).get();
+      if (doc.exists) return true;
 
+      final userDoc = await _firestore.collection('users').doc(userId).get();
       if (!userDoc.exists) return false;
-
-      final favoredPlaces = List<String>.from(userDoc['favoredPlaces'] ?? []);
+      final data = userDoc.data();
+      final favoredPlaces = List<String>.from(data?['favoredPlaces'] ?? []);
       return favoredPlaces.contains(placeId);
     } catch (e) {
       debugPrint('Error checking favorite: $e');
@@ -226,18 +316,35 @@ class PlacesProvider with ChangeNotifier {
     return places;
   }
 
+  // 📚 Get favorite place ids only (for map filtering)
+  Future<Set<String>> getFavoritePlaceIds(String userId) async {
+    try {
+      final snapshot = await _favoritesCollection
+          .where('userId', isEqualTo: userId)
+          .get();
+      final favoriteIds = snapshot.docs
+          .map((doc) => doc['placeId'] as String)
+          .toSet();
+
+      if (favoriteIds.isNotEmpty) {
+        return favoriteIds;
+      }
+
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      if (!userDoc.exists) return {};
+      final data = userDoc.data();
+      return Set<String>.from(data?['favoredPlaces'] ?? []);
+    } catch (e) {
+      debugPrint('Error getting favorite ids: $e');
+      return {};
+    }
+  }
+
   // 📚 Get favorites list
   Future<List<Place>> getFavorites(String userId) async {
     try {
-      final userDoc =
-          await _firestore.collection('users').doc(userId).get();
-
-      if (!userDoc.exists) return [];
-
-      final favoredPlaceIds =
-          List<String>.from(userDoc['favoredPlaces'] ?? []);
-
-      return _fetchPlacesByIds(favoredPlaceIds);
+      final favoriteIds = await getFavoritePlaceIds(userId);
+      return _fetchPlacesByIds(favoriteIds.toList());
     } catch (e) {
       debugPrint('Error getting favorites: $e');
       return [];
@@ -247,18 +354,65 @@ class PlacesProvider with ChangeNotifier {
   // 📍 Get places the user added ("My places")
   Future<List<Place>> getUserAddedPlaces(String userId) async {
     try {
-      final userDoc =
-          await _firestore.collection('users').doc(userId).get();
-
+      final userDoc = await _firestore.collection('users').doc(userId).get();
       if (!userDoc.exists) return [];
-
-      final addedPlaceIds =
-          List<String>.from(userDoc['addedPlaces'] ?? []);
+      final data = userDoc.data();
+      final addedPlaceIds = List<String>.from(data?['addedPlaces'] ?? []);
 
       return _fetchPlacesByIds(addedPlaceIds);
     } catch (e) {
       debugPrint('Error getting user added places: $e');
       return [];
+    }
+  }
+
+  Future<void> loadCache() async {
+    if (_cacheLoaded) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedPlaces = prefs.getString(_placesCacheKey);
+      if (cachedPlaces != null) {
+        final decoded = jsonDecode(cachedPlaces) as List<dynamic>;
+        _places = decoded
+            .cast<Map<String, dynamic>>()
+            .map((item) => Place.fromMap(item, item['id'] as String))
+            .toList();
+      }
+
+      final cachedHiddenGems = prefs.getString(_hiddenGemsCacheKey);
+      if (cachedHiddenGems != null) {
+        final decodedHidden = jsonDecode(cachedHiddenGems) as List<dynamic>;
+        _hiddenGems = decodedHidden
+            .cast<Map<String, dynamic>>()
+            .map((item) => Place.fromMap(item, item['id'] as String))
+            .toList();
+      }
+
+      _cacheLoaded = true;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading cached places: $e');
+    }
+  }
+
+  Future<void> _savePlacesCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonList = _places.map((place) => place.toJson()).toList();
+      await prefs.setString(_placesCacheKey, jsonEncode(jsonList));
+    } catch (e) {
+      debugPrint('Error saving places cache: $e');
+    }
+  }
+
+  Future<void> _saveHiddenGemsCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonList = _hiddenGems.map((place) => place.toJson()).toList();
+      await prefs.setString(_hiddenGemsCacheKey, jsonEncode(jsonList));
+    } catch (e) {
+      debugPrint('Error saving hidden gems cache: $e');
     }
   }
 
@@ -279,22 +433,22 @@ class PlacesProvider with ChangeNotifier {
           .doc(placeId)
           .collection('reviews')
           .add({
-        'userId': userId,
-        'placeId': placeId,
-        'userName': userName,
-        'reviewText': reviewText,
-        'rating': rating,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+            'userId': userId,
+            'placeId': placeId,
+            'userName': userName,
+            'reviewText': reviewText,
+            'rating': rating,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
 
       // Update place rating and review count
       final placeDoc = await placeRef.get();
       if (placeDoc.exists) {
         final currentReviewCount = placeDoc['reviewCount'] ?? 0;
-        final currentRating = placeDoc['rating'] ?? 0.0;
+        final currentRating = (placeDoc['rating'] ?? 0.0).toDouble();
 
-        // Calculate new average rating
-        final newRating = ((currentRating * currentReviewCount) + rating) /
+        final newRating =
+            ((currentRating * currentReviewCount) + rating) /
             (currentReviewCount + 1);
 
         await placeRef.update({
@@ -351,7 +505,6 @@ class PlacesProvider with ChangeNotifier {
         });
       }
 
-      // Recalculate rating and reviewCount from all reviews
       final snapshot = await reviewsRef.get();
       final count = snapshot.docs.length;
       double sum = 0.0;
@@ -364,10 +517,8 @@ class PlacesProvider with ChangeNotifier {
       final placeRef = _firestore.collection('places').doc(placeId);
       await placeRef.update({'rating': newRating, 'reviewCount': count});
 
-      // Clear cache
       _reviewsCache.remove(placeId);
-      
-      // Update local place if it exists
+
       final placeIndex = _places.indexWhere((p) => p.id == placeId);
       if (placeIndex != -1) {
         _places[placeIndex] = _places[placeIndex].copyWith(
@@ -375,7 +526,7 @@ class PlacesProvider with ChangeNotifier {
           reviewCount: count,
         );
       }
-      
+
       notifyListeners();
     } catch (e) {
       _error = e.toString();
@@ -393,7 +544,7 @@ class PlacesProvider with ChangeNotifier {
           .collection('places')
           .doc(placeId)
           .collection('reviews');
-      
+
       await reviewsRef.doc(reviewId).delete();
 
       // Recalculate rating and reviewCount
@@ -409,10 +560,8 @@ class PlacesProvider with ChangeNotifier {
       final placeRef = _firestore.collection('places').doc(placeId);
       await placeRef.update({'rating': newRating, 'reviewCount': count});
 
-      // Clear cache
       _reviewsCache.remove(placeId);
-      
-      // Update local place if it exists
+
       final placeIndex = _places.indexWhere((p) => p.id == placeId);
       if (placeIndex != -1) {
         _places[placeIndex] = _places[placeIndex].copyWith(
@@ -420,7 +569,7 @@ class PlacesProvider with ChangeNotifier {
           reviewCount: count,
         );
       }
-      
+
       notifyListeners();
     } catch (e) {
       _error = e.toString();
@@ -438,9 +587,9 @@ class PlacesProvider with ChangeNotifier {
           .where('userId', isEqualTo: userId)
           .limit(1)
           .get();
-      
+
       if (snapshot.docs.isEmpty) return null;
-      
+
       final doc = snapshot.docs.first;
       return Review.fromMap(doc.data(), doc.id);
     } catch (e) {
@@ -467,7 +616,6 @@ class PlacesProvider with ChangeNotifier {
       for (final doc in snapshot.docs) {
         var rev = Review.fromMap(doc.data(), doc.id);
 
-        // If username missing or placeholder, try to resolve from users collection
         final lowerName = rev.userName.trim().toLowerCase();
         if (rev.userName.isEmpty ||
             lowerName.contains('anon') ||
@@ -485,8 +633,7 @@ class PlacesProvider with ChangeNotifier {
               createdAt: rev.createdAt,
             );
           } else if (uid.isNotEmpty) {
-            final userDoc =
-                await _firestore.collection('users').doc(uid).get();
+            final userDoc = await _firestore.collection('users').doc(uid).get();
             String resolvedName = '';
             if (userDoc.exists && userDoc.data() != null) {
               final nameField = userDoc.data()!['name'];
@@ -521,12 +668,8 @@ class PlacesProvider with ChangeNotifier {
   // 👤 Fetch user favorites
   Future<List<String>> fetchUserFavorites(String userId) async {
     try {
-      final snapshot = await _firestore
-          .collection('favorites')
-          .where('userId', isEqualTo: userId)
-          .get();
-
-      return snapshot.docs.map((doc) => doc['placeId'] as String).toList();
+      final ids = await getFavoritePlaceIds(userId);
+      return ids.toList();
     } catch (e) {
       return [];
     }

@@ -13,6 +13,7 @@ class AuthProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
 
   AuthProvider() {
+    _user = _auth.currentUser;
     _auth.authStateChanges().listen((user) {
       _user = user;
       notifyListeners();

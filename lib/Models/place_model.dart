@@ -12,6 +12,7 @@ class Place {
   final DateTime createdAt;
   final List<String> favoredByUsers;
   final int reviewCount;
+  final String? locationName;
 
   Place({
     required this.id,
@@ -27,10 +28,21 @@ class Place {
     required this.createdAt,
     this.favoredByUsers = const [],
     this.reviewCount = 0,
+    this.locationName,
   });
 
   // Convert Firestore/JSON to Place object
   factory Place.fromMap(Map<String, dynamic> map, String docId) {
+    DateTime createdAtValue;
+    final rawCreatedAt = map['createdAt'];
+    if (rawCreatedAt is String) {
+      createdAtValue = DateTime.tryParse(rawCreatedAt) ?? DateTime.now();
+    } else if (rawCreatedAt != null) {
+      createdAtValue = (rawCreatedAt as dynamic).toDate();
+    } else {
+      createdAtValue = DateTime.now();
+    }
+
     return Place(
       id: docId,
       placeName: map['placeName'] ?? '',
@@ -42,15 +54,14 @@ class Place {
       category: map['category'] ?? '',
       rating: (map['rating'] ?? 0.0).toDouble(),
       imageUrl: map['imageUrl'] ?? '',
-      createdAt: map['createdAt'] != null
-          ? (map['createdAt'] as dynamic).toDate()
-          : DateTime.now(),
+      createdAt: createdAtValue,
       favoredByUsers: List<String>.from(map['favoredByUsers'] ?? []),
       reviewCount: map['reviewCount'] ?? 0,
+      locationName: map['locationName'] as String?,
     );
   }
 
-  // Convert Place object to Map
+  // Convert Place object to Map for Firestore
   Map<String, dynamic> toMap() {
     return {
       'placeName': placeName,
@@ -65,6 +76,26 @@ class Place {
       'createdAt': createdAt,
       'favoredByUsers': favoredByUsers,
       'reviewCount': reviewCount,
+      if (locationName != null) 'locationName': locationName,
+    };
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'placeName': placeName,
+      'authorId': authorId,
+      'priceRange': priceRange,
+      'longitude': longitude,
+      'latitude': latitude,
+      'description': description,
+      'category': category,
+      'rating': rating,
+      'imageUrl': imageUrl,
+      'createdAt': createdAt.toIso8601String(),
+      'favoredByUsers': favoredByUsers,
+      'reviewCount': reviewCount,
+      'locationName': locationName,
     };
   }
 
@@ -81,6 +112,7 @@ class Place {
     DateTime? createdAt,
     List<String>? favoredByUsers,
     int? reviewCount,
+    String? locationName,
   }) {
     return Place(
       id: id ?? this.id,
@@ -96,6 +128,14 @@ class Place {
       createdAt: createdAt ?? this.createdAt,
       favoredByUsers: favoredByUsers ?? this.favoredByUsers,
       reviewCount: reviewCount ?? this.reviewCount,
+      locationName: locationName ?? this.locationName,
     );
+  }
+
+  String get displayLocation {
+    if (locationName != null && locationName!.trim().isNotEmpty) {
+      return locationName!;
+    }
+    return category;
   }
 }

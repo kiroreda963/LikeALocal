@@ -1,24 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:likealocal/home/pages/explore_page.dart';
 import 'package:provider/provider.dart';
 import 'auth/auth_provider.dart';
 import 'auth/pages/auth_page.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'Providers/PlaceProvider.dart';
-import 'messaging/pages/inbox_screen.dart';
 import 'home/pages/home_page_main.dart';
-import '../messaging/messaging_service.dart';
 import './add_place/pages/add_place_page.dart';
-import './home/pages/map_page.dart';
+import 'services/message_notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     await Firebase.initializeApp();
-    print('Firebase initialized successfully');
+    await MessageNotificationService.instance.initialize();
+
+    FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user != null) {
+        MessageNotificationService.instance.startListening(user.uid);
+      } else {
+        MessageNotificationService.instance.stopListening();
+      }
+    });
+
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      MessageNotificationService.instance.startListening(currentUser.uid);
+    }
   } catch (e) {
-    print('Error initializing Firebase: $e');
+    debugPrint('Error initializing Firebase: $e');
   }
   // await FirebaseFirestore.instance.collection('conversations').doc('conv1').set(
   //   {
@@ -51,12 +62,28 @@ void main() async {
   // await sendmessage("user2", 'Hello from user2!');
 }
 
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context);
+    if (authProvider.user != null) {
+      return const MainHomePage();
+    }
+    return const AuthScreen();
+  }
+}
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'Auth',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -65,7 +92,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.black),
         useMaterial3: true,
       ),
-      initialRoute: '/auth',
+      home: const AuthGate(),
       routes: {
         '/auth': (context) => const AuthScreen(),
         '/home': (context) => const MainHomePage(),

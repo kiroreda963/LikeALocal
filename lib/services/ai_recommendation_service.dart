@@ -9,11 +9,15 @@ class UserPlaceContext {
   final List<Place> favorites;
   final List<Place> myPlaces;
   final List<Place> catalog;
+  final Map<String, String> placeDistances;
+  final String currentLocationMessage;
 
   const UserPlaceContext({
     this.favorites = const [],
     this.myPlaces = const [],
     this.catalog = const [],
+    this.placeDistances = const {},
+    this.currentLocationMessage = '',
   });
 
   bool get hasPersonalPlaces => favorites.isNotEmpty || myPlaces.isNotEmpty;
@@ -43,7 +47,7 @@ class UserPlaceContext {
     }
 
     if (sections.isEmpty) {
-      return 'No saved places yet. Ask the user to favorite places or add their own.';
+      return 'No saved favorites or added places yet. Ask the user to favorite spots or add new places so I can make personalized suggestions.';
     }
 
     return sections.join('\n\n');
@@ -51,11 +55,14 @@ class UserPlaceContext {
 
   String _formatPlaces(Iterable<Place> places) {
     return places
-        .map(
-          (p) =>
-              '- ${p.placeName} (${p.category}, ${p.priceRange}, '
-              'rating ${p.rating.toStringAsFixed(1)}): ${p.description}',
-        )
+        .map((p) {
+          final distance = placeDistances[p.id];
+          final distanceText = distance != null && distance.isNotEmpty
+              ? ', approx. $distance away'
+              : '';
+          return '- ${p.placeName} (${p.category}, ${p.priceRange}, '
+              'rating ${p.rating.toStringAsFixed(1)}$distanceText): ${p.description}';
+        })
         .join('\n');
   }
 
@@ -127,9 +134,12 @@ IMPORTANT:
 - Only recommend real places from the lists below. Do not invent place names.
 - Prefer favorites and user-added places when they fit the request.
 - If suggesting catalog places, pick ones similar in category/vibe to favorites.
+- If the user has no favorites or added places, do not say "based on your preferences". Instead, explicitly state "You do not have preferences yet, but here are some places you may like:" and suggest options from the catalog.
+- If distance information is available, include approximate distance in the recommendation.
 
 Learned taste profile: ${profile.summary}
 
+${placeContext.currentLocationMessage.isNotEmpty ? 'Current location note: ${placeContext.currentLocationMessage}\n\n' : ''}
 User's places:
 ${placeContext.toPromptSection()}
 
@@ -139,9 +149,13 @@ $recentContext
 User message: $userMessage
 
 Give 2-3 specific recommendations from the lists above. Say why each fits
-their favorites or places they added, mention budget/atmosphere when relevant,
+their favorites or places they added, mention distance when available, budget/atmosphere when relevant,
 and end with one follow-up question.
 ''';
+
+    final systemContent = !placeContext.hasPersonalPlaces
+        ? 'You are a smart local travel assistant. Only recommend places provided in the user message context. IMPORTANT: The user has no saved places or favorites. You MUST start your response with exactly: "You do not have preferences yet, but here are some places you may like:" and then suggest places from the catalog.'
+        : 'You are a smart local travel assistant. Only recommend places provided in the user message context.';
 
     try {
       final response = await http
@@ -156,11 +170,7 @@ and end with one follow-up question.
             body: jsonEncode({
               'model': _model,
               'messages': [
-                {
-                  'role': 'system',
-                  'content':
-                      'You are a smart local travel assistant. Only recommend places provided in the user message context.',
-                },
+                {'role': 'system', 'content': systemContent},
                 {'role': 'user', 'content': prompt},
               ],
             }),
@@ -193,11 +203,18 @@ and end with one follow-up question.
           'or add your own places, then ask me again for personalized picks.';
     }
 
-    final atmosphere = profile.atmosphere ?? 'your style';
-    final budget = profile.budget ?? 'your budget';
-    final buffer = StringBuffer(
-      'Based on $atmosphere tastes and $budget, here are picks from your places:\n\n',
-    );
+    final buffer = StringBuffer();
+    if (!placeContext.hasPersonalPlaces) {
+      buffer.writeln(
+        'You do not have preferences yet, but here are some places you may like:\n',
+      );
+    } else {
+      final atmosphere = profile.atmosphere ?? 'your style';
+      final budget = profile.budget ?? 'your budget';
+      buffer.writeln(
+        'Based on $atmosphere tastes and $budget, here are picks from your places:\n',
+      );
+    }
 
     for (var i = 0; i < picks.length; i++) {
       final place = picks[i];

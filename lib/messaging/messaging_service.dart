@@ -28,6 +28,15 @@ class MessagingService {
         );
   }
 
+  /// Get a single conversation by ID.
+  Future<ConversationModel?> getConversation(String conversationId, String currentUserId) async {
+    final doc = await _conversations.doc(conversationId).get();
+    if (doc.exists) {
+      return ConversationModel.fromDoc(doc, currentUserId);
+    }
+    return null;
+  }
+
   // ── Messages ───────────────────────────────────────────────────────────────
 
   /// Real-time stream of messages in a conversation.
@@ -59,7 +68,11 @@ class MessagingService {
 
     // Update conversation metadata
     final convRef = _conversations.doc(conversationId);
-    batch.update(convRef, {'lastMessage': text, 'lastMessageTime': now});
+    batch.update(convRef, {
+      'lastMessage': text,
+      'lastMessageTime': now,
+      'lastSenderId': senderId,
+    });
 
     await batch.commit();
   }

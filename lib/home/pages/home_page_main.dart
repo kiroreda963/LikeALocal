@@ -1,11 +1,13 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:likealocal/home/pages/explore_page.dart';
+import 'package:provider/provider.dart';
+import '../../Providers/PlaceProvider.dart';
+import '../../profile/pages/profile_page.dart';
 import '../widgets/top_bar.dart';
 import '../widgets/bottom_nav_bar.dart';
+import 'explore_page.dart';
 import 'home_page.dart';
-import '../../auth/auth_provider.dart';
-import 'package:provider/provider.dart';
-import '../../profile/pages/profile_page.dart';
 import 'map_page.dart';
 
 class MainHomePage extends StatelessWidget {
@@ -26,9 +28,9 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
-  late final Future<String?> _userNameFuture;
+  PlacesProvider? _placesProvider;
+  String _userName = 'Traveler';
 
-  // Pages can be extended as needed
   final List<Widget> _pages = const [
     HomePage(),
     ExplorePage(),
@@ -39,33 +41,63 @@ class _MainShellState extends State<MainShell> {
   @override
   void initState() {
     super.initState();
-    _userNameFuture = Provider.of<AuthProvider>(
-      context,
-      listen: false,
-    ).getUserName();
+    _loadUserName();
+  }
+
+  Future<void> _loadUserName() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUser.uid)
+        .get();
+
+    final name = userDoc.data()?['name'] as String?;
+    final email = currentUser.email;
+    if (!mounted) return;
+
+    setState(() {
+      _userName = name?.trim().isNotEmpty == true
+          ? name!
+          : email?.split('@').first ?? 'Traveler';
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final provider = context.read<PlacesProvider>();
+    if (_placesProvider != provider) {
+      _placesProvider?.removeListener(_onPlacesProviderChanged);
+      _placesProvider = provider;
+      _placesProvider!.addListener(_onPlacesProviderChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    _placesProvider?.removeListener(_onPlacesProviderChanged);
+    super.dispose();
+  }
+
+  void _onPlacesProviderChanged() {
+    final focus = _placesProvider?.mapFocusPlace;
+    if (focus != null && _currentIndex != 2 && mounted) {
+      setState(() => _currentIndex = 2);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<String?>(
-      future: _userNameFuture,
-      builder: (context, snapshot) {
-        final userName = snapshot.data ?? 'Guest';
-
-        return Scaffold(
-          backgroundColor: const Color(0xFFF8F8F8),
-
-          // ── Isolated Top Bar ──
-          appBar: TopBar(userName: userName),
-          // ── Page Body ──
-          body: IndexedStack(index: _currentIndex, children: _pages),
-          // ── Isolated Bottom Nav Bar ──
-          bottomNavigationBar: BottomNavBar(
-            currentIndex: _currentIndex,
-            onTap: (index) => setState(() => _currentIndex = index),
-          ),
-        );
-      },
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F8F8),
+      appBar: _currentIndex == 0 ? TopBar(userName: _userName) : null,
+      body: IndexedStack(index: _currentIndex, children: _pages),
+      bottomNavigationBar: BottomNavBar(
+        currentIndex: _currentIndex,
+        onTap: (index) => setState(() => _currentIndex = index),
+      ),
     );
   }
 }
