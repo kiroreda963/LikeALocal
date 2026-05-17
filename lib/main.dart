@@ -9,6 +9,7 @@ import 'Providers/PlaceProvider.dart';
 import 'home/pages/home_page_main.dart';
 import './add_place/pages/add_place_page.dart';
 import 'services/message_notification_service.dart';
+import 'splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -92,8 +93,9 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.black),
         useMaterial3: true,
       ),
-      home: const AuthGate(),
+      home: const SplashPage(),
       routes: {
+        '/authGate': (context) => const AuthGate(),
         '/auth': (context) => const AuthScreen(),
         '/home': (context) => const MainHomePage(),
         '/add-place': (context) => const AddPlacePage(),

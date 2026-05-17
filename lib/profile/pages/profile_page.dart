@@ -257,7 +257,7 @@ class ProfilePage extends StatelessWidget {
                 _buildTile(
                   context,
                   icon: Icons.bookmark_border,
-                  title: "Saved Places",
+                  title: "My Places",
                   page: const SavedPlacesPage(),
                 ),
 

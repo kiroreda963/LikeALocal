@@ -3,8 +3,9 @@ import 'trending_place_card.dart';
 
 class TrendingPlacesSection extends StatelessWidget {
   final List<TrendingPlaceData> places;
+  final Function(int index)? onTap;
 
-  const TrendingPlacesSection({super.key, required this.places});
+  const TrendingPlacesSection({super.key, required this.places, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +37,7 @@ class TrendingPlacesSection extends StatelessWidget {
                   distance: place.distance,
                   rating: place.rating,
                   category: place.category,
+                  onTap: () => onTap?.call(index),
                 );
               },
             ),

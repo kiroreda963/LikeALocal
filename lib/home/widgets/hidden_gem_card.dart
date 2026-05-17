@@ -8,6 +8,8 @@ class HiddenGemCard extends StatelessWidget {
   final String category;
   final double rating;
 
+  final VoidCallback? onTap;
+
   const HiddenGemCard({
     super.key,
     required this.imageUrl,
@@ -16,11 +18,14 @@ class HiddenGemCard extends StatelessWidget {
     required this.location,
     required this.category,
     required this.rating,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -140,6 +145,6 @@ class HiddenGemCard extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ),);
   }
 }
