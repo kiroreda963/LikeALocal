@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import './edit_profile_page.dart';
 import './favorite_places_page.dart';
 import './saved_places_page.dart';
+import '../../subscription/pages/subscription_page.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
@@ -93,6 +94,13 @@ class ProfilePage extends StatelessWidget {
                   icon: Icons.bookmark_border,
                   title: "Saved Places",
                   page: const SavedPlacesPage(),
+                ),
+                _divider(),
+                _buildTile(
+                  context,
+                  icon: Icons.workspace_premium,
+                  title: "Subscriptions",
+                  page: const SubscriptionPage(),
                 ),
               ],
             ),
