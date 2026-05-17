@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../Models/conversation_model.dart';
 import '../messaging_service.dart';
 import '../widgets/conversation_tile.dart';
+import '../../home/pages/ai_chat_page.dart';
 import 'chat_screen.dart';
 
 class InboxScreen extends StatelessWidget {
@@ -48,7 +49,7 @@ class InboxScreen extends StatelessWidget {
           ConversationTile(
             conversation: aiConversation,
             isPinned: true,
-            onTap: () => _openChat(context, aiConversation),
+            onTap: () => _openAiChat(context),
           ),
 
           // ── Section header ─────────────────────────────────────────────
@@ -79,7 +80,9 @@ class InboxScreen extends StatelessWidget {
                 if (snapshot.hasError) {
                   return Center(child: Text('Error: ${snapshot.error}'));
                 }
-                final convs = snapshot.data ?? [];
+                final convs = (snapshot.data ?? [])
+                    .where((c) => !c.isAI)
+                    .toList();
                 if (convs.isEmpty) {
                   return Center(
                     child: Text(
@@ -108,6 +111,13 @@ class InboxScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  void _openAiChat(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AiChatPage()),
     );
   }
 

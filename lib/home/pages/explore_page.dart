@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../Providers/PlaceProvider.dart';
@@ -27,11 +26,8 @@ class _ExplorePageState extends State<ExplorePage> {
     });
   }
 
-  Future<void> _launchURL(String urlString) async {
-    final Uri url = Uri.parse(urlString);
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      debugPrint("Could not launch $urlString");
-    }
+  void _openOnMap(Place place) {
+    context.read<PlacesProvider>().openPlaceOnMap(place);
   }
 
   Future<Map<String, String>> _fetchUserMeta(String userId) async {
@@ -226,10 +222,7 @@ class _ExplorePageState extends State<ExplorePage> {
                           description: place.description,
                           rating: place.rating.toString(),
                           imageUrl: place.imageUrl,
-                          longitude: place.longitude,
-                          latitude: place.latitude,
-                          locationUrl:
-                              'https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}',
+                          onMapTap: () => _openOnMap(place),
                           onChatTap: () => _openChatWithAuthor(place),
                         );
                       },
@@ -247,9 +240,7 @@ class _ExplorePageState extends State<ExplorePage> {
     required String description,
     required String rating,
     required String imageUrl,
-    required String locationUrl,
-    required double longitude,
-    required double latitude,
+    required VoidCallback onMapTap,
     required VoidCallback onChatTap,
   }) {
     return Container(
@@ -320,7 +311,7 @@ class _ExplorePageState extends State<ExplorePage> {
               _buildCardButton(
                 'Look \nOn maps',
                 Icons.location_on_outlined,
-                () => _launchURL(locationUrl),
+                onMapTap,
               ),
               const SizedBox(width: 8),
               _buildCardButton(

@@ -1,9 +1,11 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../Models/place_model.dart';
+import '../../Providers/PlaceProvider.dart';
 import '../widgets/featured_place_card.dart';
 import '../widgets/hidden_gem_card.dart';
 import '../widgets/trending_places_section.dart';
-import '../../Providers/PlaceProvider.dart';
-import 'package:provider/provider.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -14,6 +16,8 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   bool _didFetch = false;
+  Place? _recommendedPlace;
+  bool _loadingRecommendation = true;
 
   @override
   void didChangeDependencies() {
@@ -27,13 +31,43 @@ class _HomePageState extends State<HomePage> {
         );
         placesProvider.fetchPlaces();
         placesProvider.fetchHiddenGems();
+        _loadRecommendation();
       });
     }
+  }
+
+  Future<void> _loadRecommendation() async {
+    final placesProvider = context.read<PlacesProvider>();
+    if (placesProvider.places.isEmpty) {
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
+
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    final place = await placesProvider.getRecommendedPlace(userId);
+
+    if (!mounted) return;
+    setState(() {
+      _recommendedPlace = place;
+      _loadingRecommendation = false;
+    });
+  }
+
+  void _openRecommendedOnMap() {
+    final place = _recommendedPlace;
+    if (place == null) return;
+    context.read<PlacesProvider>().openPlaceOnMap(place);
   }
 
   @override
   Widget build(BuildContext context) {
     final placesProvider = Provider.of<PlacesProvider>(context);
+
+    if (!_loadingRecommendation &&
+        _recommendedPlace == null &&
+        placesProvider.places.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadRecommendation());
+    }
+
     final trendingPlaces = placesProvider.places.map((place) {
       return TrendingPlaceData(
         imageUrl: place.imageUrl,
@@ -85,10 +119,11 @@ class _HomePageState extends State<HomePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Subtitle
-          const Text(
-            'Based on your taste...',
-            style: TextStyle(
+          Text(
+            _recommendedPlace != null
+                ? 'Recommended for you'
+                : 'Based on your taste...',
+            style: const TextStyle(
               fontSize: 15,
               color: Colors.black54,
               fontWeight: FontWeight.w400,
@@ -96,17 +131,36 @@ class _HomePageState extends State<HomePage> {
           ),
           const SizedBox(height: 14),
 
-          // Featured Place
-          FeaturedPlaceCard(
-            imageUrl:
-                'https://images.squarespace-cdn.com/content/v1/56c13cc00442627a08632989/1585432288121-15NNGMB5XEP5CJ1YSGL3/egyptianmuseum.jpg',
-            name: 'The Egyptian Museum',
-            location: 'El-Tahrir square',
-            distance: '2 km',
-            category: 'Cultural',
-            rating: 4.8,
-            reviewCount: '5k reviews',
-          ),
+          if (_loadingRecommendation)
+            const SizedBox(
+              height: 150,
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_recommendedPlace != null)
+            GestureDetector(
+              onTap: _openRecommendedOnMap,
+              child: FeaturedPlaceCard(
+                imageUrl: _recommendedPlace!.imageUrl,
+                name: _recommendedPlace!.placeName,
+                location: _recommendedPlace!.category,
+                distance: _recommendedPlace!.priceRange,
+                category: _recommendedPlace!.category,
+                rating: _recommendedPlace!.rating,
+                reviewCount: _recommendedPlace!.reviewCount > 0
+                    ? '${_recommendedPlace!.reviewCount} reviews'
+                    : 'New spot',
+              ),
+            )
+          else
+            const SizedBox(
+              height: 150,
+              child: Center(
+                child: Text(
+                  'Favorite places to get personalized picks',
+                  style: TextStyle(color: Colors.black54),
+                ),
+              ),
+            ),
           const SizedBox(height: 20),
 
           // Trending Places (scrollable horizontally)
