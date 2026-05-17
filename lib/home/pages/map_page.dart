@@ -246,11 +246,11 @@ class _MapPageState extends State<MapPage> {
     return PlaceService.calculateDistance(origin, placeLatLng);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<PlacesProvider>(
-      builder: (context, placesProvider, _) {
-        final places = placesProvider.places;
+ @override
+Widget build(BuildContext context) {
+  return Consumer<PlacesProvider>(
+    builder: (context, placesProvider, _) {
+      final places = placesProvider.places;
 
         final filteredPlaces = places.where((place) {
         final matchesQuery =
@@ -265,7 +265,7 @@ class _MapPageState extends State<MapPage> {
         return matchesQuery && matchesCategory && matchesFavorites;
       }).toList();
 
-        final selectedPlace = _selectedPlace;
+      final selectedPlace = _selectedPlace;
 
         return Scaffold(
         body: Stack(
@@ -918,6 +918,7 @@ class _MapPageState extends State<MapPage> {
         return AlertDialog(
           title: Text('Message about ${place.placeName}'),
           backgroundColor: Colors.white,
+          backgroundColor: Colors.white,
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -971,6 +972,7 @@ class _MapPageState extends State<MapPage> {
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide(color: Colors.grey.shade300),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
                   ),
                 ),
               ),
@@ -979,6 +981,10 @@ class _MapPageState extends State<MapPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Color.fromARGB(255, 0, 0, 0)),
+              ),
               child: const Text(
                 'Cancel',
                 style: TextStyle(color: Color.fromARGB(255, 0, 0, 0)),
@@ -999,6 +1005,11 @@ class _MapPageState extends State<MapPage> {
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color.fromARGB(255, 255, 255, 255),
+                backgroundColor: const Color.fromARGB(255, 255, 255, 255),
+              ),
+              child: const Text(
+                'Send',
+                style: TextStyle(color: Color.fromARGB(255, 0, 0, 0)),
               ),
               child: const Text(
                 'Send',
@@ -1194,6 +1205,14 @@ class _MapFiltersRow extends StatelessWidget {
       'Nightlife',
       'Beaches & Resorts',
     ];
+    final categories = [
+      'Historical Places',
+      'Restaurants & Cafes',
+      'Shopping',
+      'Entertainment',
+      'Nightlife',
+      'Beaches & Resorts',
+    ];
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -1300,9 +1319,7 @@ class _MapFiltersRow extends StatelessWidget {
       ),
     );
   }
-}
-
-class _SearchResultsFirebase extends StatelessWidget {
+}class _SearchResultsFirebase extends StatelessWidget {
   final List<Place> places;
   final ValueChanged<Place> onTap;
   final String? filterType;
@@ -1333,7 +1350,9 @@ class _SearchResultsFirebase extends StatelessWidget {
       child: Container(
         width: 280,
         padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 12),
         constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.5,
           maxHeight: MediaQuery.of(context).size.height * 0.5,
         ),
         decoration: BoxDecoration(
@@ -1444,11 +1463,83 @@ class _SearchResultsFirebase extends StatelessWidget {
               ),
           ],
         ),
+            else
+              Expanded(
+                child: ListView.builder(
+                  padding: EdgeInsets.zero,
+                  itemCount: places.length,
+                  itemBuilder: (context, index) {
+                    final place = places[index];
+                    return ListTile(
+                      dense: false,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
+                      leading: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF143C23)
+                              .withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          PlaceService.getIconByName(place.placeName),
+                          color: const Color(0xFF143C23),
+                          size: 18,
+                        ),
+                      ),
+                      title: Text(
+                        place.placeName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                      subtitle: Text(
+                        place.category,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.black54,
+                        ),
+                      ),
+                      trailing: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE7FF00),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.star,
+                                color: Colors.black, size: 12),
+                            const SizedBox(width: 2),
+                            Text(
+                              place.rating.toStringAsFixed(1),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      onTap: () => onTap(place),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
 }
-
 class _PlaceMarkerFirebase extends StatelessWidget {
   final Place place;
   final bool selected;
@@ -1509,10 +1600,11 @@ class _PlaceMarkerFirebase extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Flexible(
+                    Flexible( // Already using Flexible, but ensure it works
                       child: Text(
                         place.placeName,
                         overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                         maxLines: 1,
                         style: const TextStyle(
                           color: Color(0xFF219357),
@@ -1532,6 +1624,7 @@ class _PlaceMarkerFirebase extends StatelessWidget {
                         borderRadius: BorderRadius.circular(7),
                       ),
                       child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(

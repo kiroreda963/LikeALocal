@@ -163,6 +163,15 @@ class PlacesProvider with ChangeNotifier {
               _hiddenGems = snapshot.docs
                   .map((doc) => Place.fromMap(doc.data(), doc.id))
                   .toList();
+    _hiddenGemsSubscription = _firestore
+        .collection('places')
+        .snapshots()
+        .listen(
+          (snapshot) {
+            try {
+              _hiddenGems = snapshot.docs
+                  .map((doc) => Place.fromMap(doc.data(), doc.id))
+                  .toList();
 
               _hiddenGems.shuffle(Random());
               _hiddenGems = _hiddenGems.take(5).toList();
@@ -208,6 +217,7 @@ class PlacesProvider with ChangeNotifier {
   void setCategory(String category) {
     _selectedCategory = category;
     notifyListeners();
+    notifyListeners();
   }
 
   // 🔍 Get single place by id
@@ -224,6 +234,7 @@ class PlacesProvider with ChangeNotifier {
     }
   }
 
+  String _selectedPrice = 'All';
   String _selectedPrice = 'All';
   String get selectedPrice => _selectedPrice;
 
@@ -445,6 +456,13 @@ class PlacesProvider with ChangeNotifier {
         'rating': rating,
         'createdAt': FieldValue.serverTimestamp(),
       });
+        'userId': userId,
+        'placeId': placeId,
+        'userName': userName,
+        'reviewText': reviewText,
+        'rating': rating,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
 
       // Update place rating and review count
       final placeDoc = await placeRef.get();
@@ -471,6 +489,7 @@ class PlacesProvider with ChangeNotifier {
     }
   }
 
+  // 🔁 Add or update a user's review for a place
   // 🔁 Add or update a user's review for a place
   Future<void> addOrUpdateReview({
     required String userId,
@@ -540,6 +559,7 @@ class PlacesProvider with ChangeNotifier {
   }
 
   // ❌ Delete a review by id
+  // ❌ Delete a review by id
   Future<void> deleteReview({
     required String placeId,
     required String reviewId,
@@ -582,6 +602,7 @@ class PlacesProvider with ChangeNotifier {
     }
   }
 
+  // 🔎 Get current user's review for a place
   // 🔎 Get current user's review for a place
   Future<Review?> getUserReviewForPlace(String userId, String placeId) async {
     try {
@@ -640,6 +661,8 @@ class PlacesProvider with ChangeNotifier {
           } else if (uid.isNotEmpty) {
             final userDoc =
                 await _firestore.collection('users').doc(uid).get();
+            final userDoc =
+                await _firestore.collection('users').doc(uid).get();
             String resolvedName = '';
             if (userDoc.exists && userDoc.data() != null) {
               final nameField = userDoc.data()!['name'];
@@ -680,6 +703,14 @@ class PlacesProvider with ChangeNotifier {
       return [];
     }
   }
+
+  @override
+  void dispose() {
+    _placesSubscription?.cancel();
+    _hiddenGemsSubscription?.cancel();
+    super.dispose();
+  }
+}
 
   @override
   void dispose() {

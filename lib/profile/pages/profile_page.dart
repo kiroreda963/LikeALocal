@@ -7,6 +7,7 @@ import './favorite_places_page.dart';
 import './saved_places_page.dart';
 import './chat_settings_page.dart';
 import './friends_groups_page.dart';
+import '../../subscription/pages/subscription_page.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
@@ -258,15 +259,6 @@ class ProfilePage extends StatelessWidget {
                   icon: Icons.bookmark_border,
                   title: "My Places",
                   page: const SavedPlacesPage(),
-                ),
-
-                _divider(),
-
-                _buildTile(
-                  context,
-                  icon: Icons.chat_outlined,
-                  title: "Chat & Privacy",
-                  page: const ChatSettingsPage(),
                 ),
               ],
             ),

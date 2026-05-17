@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
@@ -23,6 +25,8 @@ class _AiChatPageState extends State<AiChatPage> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final AiRecommendationService _aiService = AiRecommendationService();
+  final MessagingService _messagingService = MessagingService();
+  PlacesProvider? _placesProvider;
   final MessagingService _messagingService = MessagingService();
   PlacesProvider? _placesProvider;
 
@@ -147,6 +151,7 @@ class _AiChatPageState extends State<AiChatPage> {
   @override
   void dispose() {
     _placesProvider?.removeListener(_onPlacesUpdated);
+    _placesProvider?.removeListener(_onPlacesUpdated);
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -194,6 +199,7 @@ class _AiChatPageState extends State<AiChatPage> {
     _messageController.clear();
     _profile.learnFrom(text);
 
+    setState(() => _isThinking = true);
     setState(() => _isThinking = true);
     _scrollToBottom();
 
@@ -244,7 +250,21 @@ class _AiChatPageState extends State<AiChatPage> {
 
     if (!mounted) return;
     setState(() => _isThinking = false);
+    setState(() => _isThinking = false);
     _scrollToBottom();
+  }
+
+  List<ChatMessage> _toChatMessages(List<MessageModel> messages) {
+    final userId = _userId;
+    return messages
+        .map(
+          (message) => ChatMessage(
+            text: message.text,
+            fromUser: message.senderId == userId,
+            timestamp: message.timestamp.toDate(),
+          ),
+        )
+        .toList();
   }
 
   List<ChatMessage> _toChatMessages(List<MessageModel> messages) {
@@ -572,6 +592,7 @@ class _TypingBubble extends StatelessWidget {
 
 class _SmartSuggestions extends StatelessWidget {
   final UserPlaceContext placeContext;
+  final UserPlaceContext placeContext;
   final ValueChanged<String> onTap;
 
   const _SmartSuggestions({required this.placeContext, required this.onTap});
@@ -605,6 +626,7 @@ class _SmartSuggestions extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         itemBuilder: (context, index) {
           final text = _suggestions[index];
+          final text = _suggestions[index];
           return ActionChip(
             label: Text(text),
             backgroundColor: Colors.white,
@@ -617,6 +639,7 @@ class _SmartSuggestions extends StatelessWidget {
         },
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemCount: _suggestions.length,
+        itemCount: _suggestions.length,
       ),
     );
   }
@@ -624,7 +647,9 @@ class _SmartSuggestions extends StatelessWidget {
 
 class _MessageComposer extends StatelessWidget {
   final TextEditingController? controller;
+  final TextEditingController? controller;
   final bool enabled;
+  final VoidCallback? onSend;
   final VoidCallback? onSend;
 
   const _MessageComposer({this.controller, required this.enabled, this.onSend});
@@ -647,6 +672,7 @@ class _MessageComposer extends StatelessWidget {
                   minLines: 1,
                   maxLines: 3,
                   textInputAction: TextInputAction.send,
+                  onSubmitted: (_) => onSend?.call(),
                   onSubmitted: (_) => onSend?.call(),
                   decoration: InputDecoration(
                     hintText: 'Message...',

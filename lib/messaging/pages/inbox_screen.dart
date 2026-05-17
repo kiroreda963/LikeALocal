@@ -55,6 +55,7 @@ class InboxScreen extends StatelessWidget {
             conversation: aiConversation,
             isPinned: true,
             onTap: () => _openAiChat(context),
+            onTap: () => _openAiChat(context),
           ),
 
           // ── Section header ─────────────────────────────────────────────
@@ -88,6 +89,9 @@ class InboxScreen extends StatelessWidget {
                 final convs = (snapshot.data ?? [])
                     .where((c) => !c.isAI)
                     .toList();
+                final convs = (snapshot.data ?? [])
+                    .where((c) => !c.isAI)
+                    .toList();
                 if (convs.isEmpty) {
                   return Center(
                     child: Text(
@@ -116,6 +120,13 @@ class InboxScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  void _openAiChat(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AiChatPage()),
     );
   }
 
