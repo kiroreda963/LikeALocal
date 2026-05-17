@@ -8,6 +8,8 @@ class TrendingPlaceCard extends StatelessWidget {
   final double rating;
   final String category;
 
+  final VoidCallback? onTap;
+
   const TrendingPlaceCard({
     super.key,
     required this.imageUrl,
@@ -16,11 +18,14 @@ class TrendingPlaceCard extends StatelessWidget {
     required this.distance,
     required this.rating,
     required this.category,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
       width: 170,
       margin: const EdgeInsets.only(right: 12),
       decoration: BoxDecoration(
@@ -165,6 +170,6 @@ class TrendingPlaceCard extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ),);
   }
 }

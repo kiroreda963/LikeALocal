@@ -530,7 +530,32 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
     );
   }
 
-  void _showCreateGroupDialog() {
+  void _showCreateGroupDialog() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(currentUser.uid).get();
+    final isPremium = userDoc.data()?['isPremium'] ?? false;
+
+    if (!isPremium) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Upgrade to Pro'),
+            content: const Text('Creating groups is a Pro feature. Upgrade to Pro to create groups!'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+
     final nameController = TextEditingController();
     final List<String> selectedFriends = [];
 

@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../Providers/PlaceProvider.dart';
 import '../../../Models/place_model.dart';
 import '../../../Models/conversation_model.dart';
@@ -1598,6 +1599,14 @@ class _SelectedPlaceSheetFirebaseState
     }
   }
 
+  @override
+  void didUpdateWidget(_SelectedPlaceSheetFirebase oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.place.id != widget.place.id) {
+      _checkFavorited();
+    }
+  }
+
   Future<void> _toggleFavorite() async {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) {
@@ -1653,9 +1662,31 @@ class _SelectedPlaceSheetFirebaseState
     }
   }
 
-  void _showShareDialog(BuildContext context, Place place) {
+  void _showShareDialog(BuildContext context, Place place) async {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return;
+
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(currentUser.uid).get();
+    final isPremium = userDoc.data()?['isPremium'] ?? false;
+
+    if (!isPremium) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Upgrade to Pro'),
+            content: const Text('Sharing places is a Pro feature. Upgrade to Pro to share places with friends!'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
 
     showModalBottomSheet(
       context: context,
@@ -1891,6 +1922,22 @@ class _SelectedPlaceSheetFirebaseState
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                       ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.directions, color: Color(0xFF143C23)),
+                      onPressed: () async {
+                        final url = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=${widget.place.latitude},${widget.place.longitude}');
+                        if (await canLaunchUrl(url)) {
+                          await launchUrl(url, mode: LaunchMode.externalApplication);
+                        } else {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Could not open maps')),
+                            );
+                          }
+                        }
+                      },
                     ),
                   ],
                 ),

@@ -4,6 +4,7 @@ class User {
   final String email;
   final String phoneNumber;
   final bool isPremium;
+  final int aiMessageCount;
   List<String>? favoredPlaces;
   List<String>? addedPlaces;
   List<String>? friends;
@@ -16,6 +17,7 @@ class User {
     required this.email,
     required this.phoneNumber,
     this.isPremium = false,
+    this.aiMessageCount = 0,
     this.photoUrl,
     this.favoredPlaces,
     this.addedPlaces,
@@ -29,6 +31,7 @@ class User {
       email: map['email'] ?? '',
       phoneNumber: map['phoneNumber'] ?? '',
       isPremium: map['isPremium'] ?? false,
+      aiMessageCount: map['aiMessageCount'] ?? 0,
       photoUrl: map['photoUrl'],
       favoredPlaces: List<String>.from(map['favoredPlaces'] ?? []),
       addedPlaces: List<String>.from(map['addedPlaces'] ?? []),
@@ -41,7 +44,8 @@ class User {
       'name': name,
       'email': email,
       'phoneNumber': phoneNumber,
-      'isPremium': isPremium ?? false,
+      'isPremium': isPremium,
+      'aiMessageCount': aiMessageCount,
       'photoUrl': photoUrl,
       'favoredPlaces': favoredPlaces,
       'addedPlaces': addedPlaces,

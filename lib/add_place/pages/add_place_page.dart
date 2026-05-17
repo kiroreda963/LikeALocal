@@ -132,6 +132,29 @@ class _AddPlacePageState extends State<AddPlacePage> {
       return;
     }
 
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(currentUser.uid).get();
+    final isPremium = userDoc.data()?['isPremium'] ?? false;
+    final addedPlaces = List<String>.from(userDoc.data()?['addedPlaces'] ?? []);
+
+    if (!isPremium && addedPlaces.length >= 3) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Upgrade to Pro'),
+            content: const Text('Free users can only add up to 3 places. Upgrade to Pro to add unlimited places!'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+
     setState(() {
       isLoading = true;
     });

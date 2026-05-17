@@ -157,6 +157,36 @@ class _AiChatPageState extends State<AiChatPage> {
     final userId = _userId;
     if (text.isEmpty || _isThinking || userId == null) return;
 
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+    final userData = userDoc.data();
+    final isPremium = userData?['isPremium'] ?? false;
+    final aiMessageCount = userData?['aiMessageCount'] ?? 0;
+
+    if (!isPremium && aiMessageCount >= 4) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Upgrade to Pro'),
+            content: const Text('You have reached the limit of 4 free AI recommendations. Upgrade to Pro for unlimited access!'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                child: const Text('Upgrade'),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+
     await _loadUserPlaces();
 
     _messageController.clear();
@@ -194,7 +224,14 @@ class _AiChatPageState extends State<AiChatPage> {
       profile: _profile,
       history: history,
       placeContext: _placeContext,
+      userLocation: _currentLocation,
     );
+
+    if (!isPremium) {
+      await FirebaseFirestore.instance.collection('users').doc(userId).update({
+        'aiMessageCount': FieldValue.increment(1),
+      });
+    }
 
     await _messagingService.sendAiMessage(
       userId: userId,

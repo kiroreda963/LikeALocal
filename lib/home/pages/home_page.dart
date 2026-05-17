@@ -259,7 +259,13 @@ class _HomePageState extends State<HomePage> {
           const SizedBox(height: 20),
 
           // Trending Places (scrollable horizontally)
-          TrendingPlacesSection(places: trendingPlaces),
+          TrendingPlacesSection(
+            places: trendingPlaces,
+            onTap: (index) {
+              final place = placesProvider.places[index];
+              placesProvider.openPlaceOnMap(place);
+            },
+          ),
           const SizedBox(height: 22),
 
           // Hidden Gems Section
@@ -274,14 +280,17 @@ class _HomePageState extends State<HomePage> {
           const SizedBox(height: 12),
 
           // Hidden Gem cards
-          ...hiddenGems.map(
-            (gem) => HiddenGemCard(
-              imageUrl: gem.imageUrl,
-              name: gem.name,
-              description: gem.description,
-              location: gem.location,
-              category: gem.category,
-              rating: gem.rating,
+          ...placesProvider.hiddenGems.map(
+            (place) => HiddenGemCard(
+              imageUrl: place.imageUrl,
+              name: place.placeName,
+              description: place.description,
+              location: _displayLocationForPlace(place),
+              category: place.category,
+              rating: place.rating,
+              onTap: () {
+                placesProvider.openPlaceOnMap(place);
+              },
             ),
           ),
 

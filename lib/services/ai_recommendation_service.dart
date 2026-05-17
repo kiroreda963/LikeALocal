@@ -1,7 +1,7 @@
 import 'dart:convert';
-
 import 'package:http/http.dart' as http;
-
+import 'package:latlong2/latlong.dart';
+import 'package:geolocator/geolocator.dart';
 import '../Models/place_model.dart';
 
 /// Places the user cares about — used to personalize AI suggestions.
@@ -25,6 +25,10 @@ class UserPlaceContext {
   String toPromptSection() {
     final sections = <String>[];
 
+    if (currentLocationMessage.isNotEmpty) {
+      sections.add(currentLocationMessage);
+    }
+
     if (favorites.isNotEmpty) {
       sections.add(
         'Favorite places (user loves these — prioritize similar spots):\n'
@@ -47,7 +51,7 @@ class UserPlaceContext {
     }
 
     if (sections.isEmpty) {
-      return 'No saved favorites or added places yet. Ask the user to favorite spots or add new places so I can make personalized suggestions.';
+      return 'No saved places yet. Ask the user to favorite places or add their own.';
     }
 
     return sections.join('\n\n');
@@ -55,14 +59,16 @@ class UserPlaceContext {
 
   String _formatPlaces(Iterable<Place> places) {
     return places
-        .map((p) {
-          final distance = placeDistances[p.id];
-          final distanceText = distance != null && distance.isNotEmpty
-              ? ', approx. $distance away'
-              : '';
-          return '- ${p.placeName} (${p.category}, ${p.priceRange}, '
-              'rating ${p.rating.toStringAsFixed(1)}$distanceText): ${p.description}';
-        })
+        .map(
+          (p) {
+            String distStr = '';
+            if (placeDistances.containsKey(p.id)) {
+              distStr = ', distance ${placeDistances[p.id]}';
+            }
+            return '- ${p.placeName} (${p.category}, ${p.priceRange}, '
+                'rating ${p.rating.toStringAsFixed(1)}$distStr): ${p.description}';
+          },
+        )
         .join('\n');
   }
 
@@ -112,14 +118,14 @@ class UserPlaceContext {
 class AiRecommendationService {
   static const _apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
   static const _model = 'openrouter/free';
-  static const _apiKey =
-      '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';
+  static const _apiKey =  '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';
 
   Future<String> recommend({
     required String userMessage,
     required UserTasteProfile profile,
     required List<({String role, String text})> history,
     required UserPlaceContext placeContext,
+    LatLng? userLocation,
   }) async {
     final recentContext = history
         .map((entry) => '${entry.role}: ${entry.text}')
@@ -133,12 +139,10 @@ IMPORTANT:
 - Only recommend real places from the lists below. Do not invent place names.
 - Prefer favorites and user-added places when they fit the request.
 - If suggesting catalog places, pick ones similar in category/vibe to favorites.
-- If the user has no favorites or added places, do not say "based on your preferences". Instead, explicitly state "You do not have preferences yet, but here are some places you may like:" and suggest options from the catalog.
-- If distance information is available, include approximate distance in the recommendation.
+- If the user has no saved places or favorites, do NOT say "based on your preferences". Instead, use a phrase like "You do not have preferences yet, but here are some places you may like:" when introducing recommendations. However, still engage in normal conversation if the user is just saying hello or asking a non-recommendation question.
 
 Learned taste profile: ${profile.summary}
 
-${placeContext.currentLocationMessage.isNotEmpty ? 'Current location note: ${placeContext.currentLocationMessage}\n\n' : ''}
 User's places:
 ${placeContext.toPromptSection()}
 
@@ -148,13 +152,9 @@ $recentContext
 User message: $userMessage
 
 Give 2-3 specific recommendations from the lists above. Say why each fits
-their favorites or places they added, mention distance when available, budget/atmosphere when relevant,
+their favorites or places they added, mention budget/atmosphere when relevant,
 and end with one follow-up question.
 ''';
-
-    final systemContent = !placeContext.hasPersonalPlaces
-        ? 'You are a smart local travel assistant. Only recommend places provided in the user message context. IMPORTANT: The user has no saved places or favorites. You MUST start your response with exactly: "You do not have preferences yet, but here are some places you may like:" and then suggest places from the catalog.'
-        : 'You are a smart local travel assistant. Only recommend places provided in the user message context.';
 
     try {
       final response = await http
@@ -171,7 +171,8 @@ and end with one follow-up question.
               'messages': [
                 {
                   'role': 'system',
-                  'content': systemContent,
+                  'content':
+                      'You are a smart local travel assistant. Only recommend places provided in the user message context.',
                 },
                 {'role': 'user', 'content': prompt},
               ],
@@ -204,14 +205,11 @@ and end with one follow-up question.
           'or add your own places, then ask me again for personalized picks.';
     }
 
-    final buffer = StringBuffer();
-    if (!placeContext.hasPersonalPlaces) {
-      buffer.writeln('You do not have preferences yet, but here are some places you may like:\n');
-    } else {
-      final atmosphere = profile.atmosphere ?? 'your style';
-      final budget = profile.budget ?? 'your budget';
-      buffer.writeln('Based on $atmosphere tastes and $budget, here are picks from your places:\n');
-    }
+    final atmosphere = profile.atmosphere ?? 'your style';
+    final budget = profile.budget ?? 'your budget';
+    final buffer = StringBuffer(
+      'Based on $atmosphere tastes and $budget, here are picks from your places:\n\n',
+    );
 
     for (var i = 0; i < picks.length; i++) {
       final place = picks[i];
