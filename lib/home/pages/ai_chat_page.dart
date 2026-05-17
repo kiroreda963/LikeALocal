@@ -63,6 +63,8 @@ class _AiChatPageState extends State<AiChatPage> {
   }
 
   Future<void> _loadUserPlaces() async {
+    if (!mounted) return;
+
     final user = FirebaseAuth.instance.currentUser;
     final placesProvider = context.read<PlacesProvider>();
 
@@ -201,23 +203,24 @@ class _AiChatPageState extends State<AiChatPage> {
       text: text,
     );
 
-    final history = [
-      ...existingMessages,
-      MessageModel(
-        id: '',
-        senderId: userId,
-        text: text,
-        timestamp: Timestamp.now(),
-        isRead: false,
-      ),
-    ]
-        .map(
-          (message) => (
-            role: message.senderId == userId ? 'User' : 'Assistant',
-            text: message.text,
-          ),
-        )
-        .toList();
+    final history =
+        [
+              ...existingMessages,
+              MessageModel(
+                id: '',
+                senderId: userId,
+                text: text,
+                timestamp: Timestamp.now(),
+                isRead: false,
+              ),
+            ]
+            .map(
+              (message) => (
+                role: message.senderId == userId ? 'User' : 'Assistant',
+                text: message.text,
+              ),
+            )
+            .toList();
 
     final reply = await _aiService.recommend(
       userMessage: text,
@@ -290,14 +293,8 @@ class _AiChatPageState extends State<AiChatPage> {
                 ],
               ),
             ),
-            _SmartSuggestions(
-              placeContext: _placeContext,
-              onTap: (_) {},
-            ),
-            _MessageComposer(
-              controller: _messageController,
-              enabled: false,
-            ),
+            _SmartSuggestions(placeContext: _placeContext, onTap: (_) {}),
+            _MessageComposer(controller: _messageController, enabled: false),
           ],
         ),
       );
@@ -330,11 +327,12 @@ class _AiChatPageState extends State<AiChatPage> {
         final stored = snapshot.data ?? [];
         final messages = _toChatMessages(stored);
         if (messages.isNotEmpty) {
-          WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => _scrollToBottom(),
+          );
         }
 
-        void send(String text) =>
-            _sendMessage(text, existingMessages: stored);
+        void send(String text) => _sendMessage(text, existingMessages: stored);
 
         return _chatScaffold(
           Column(
@@ -353,10 +351,7 @@ class _AiChatPageState extends State<AiChatPage> {
                   },
                 ),
               ),
-              _SmartSuggestions(
-                placeContext: _placeContext,
-                onTap: send,
-              ),
+              _SmartSuggestions(placeContext: _placeContext, onTap: send),
               _MessageComposer(
                 controller: _messageController,
                 enabled: !_isThinking,
@@ -370,10 +365,7 @@ class _AiChatPageState extends State<AiChatPage> {
   }
 
   Widget _chatScaffold(Widget body) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFEDEDED),
-      body: body,
-    );
+    return Scaffold(backgroundColor: const Color(0xFFEDEDED), body: body);
   }
 }
 
@@ -464,8 +456,9 @@ class _ChatBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final alignment =
-        message.fromUser ? CrossAxisAlignment.end : CrossAxisAlignment.start;
+    final alignment = message.fromUser
+        ? CrossAxisAlignment.end
+        : CrossAxisAlignment.start;
     final bubbleColor = message.fromUser ? Colors.black : Colors.white;
     final textColor = message.fromUser ? Colors.white : Colors.black;
 
@@ -581,10 +574,7 @@ class _SmartSuggestions extends StatelessWidget {
   final UserPlaceContext placeContext;
   final ValueChanged<String> onTap;
 
-  const _SmartSuggestions({
-    required this.placeContext,
-    required this.onTap,
-  });
+  const _SmartSuggestions({required this.placeContext, required this.onTap});
 
   List<String> get _suggestions {
     if (placeContext.favorites.isNotEmpty) {
@@ -603,11 +593,7 @@ class _SmartSuggestions extends StatelessWidget {
         'Quiet spots like my places',
       ];
     }
-    return const [
-      'Cheap cozy dinner',
-      'Quiet hidden gems',
-      'Outdoor coffee',
-    ];
+    return const ['Cheap cozy dinner', 'Quiet hidden gems', 'Outdoor coffee'];
   }
 
   @override
@@ -641,11 +627,7 @@ class _MessageComposer extends StatelessWidget {
   final bool enabled;
   final VoidCallback? onSend;
 
-  const _MessageComposer({
-    this.controller,
-    required this.enabled,
-    this.onSend,
-  });
+  const _MessageComposer({this.controller, required this.enabled, this.onSend});
 
   @override
   Widget build(BuildContext context) {
@@ -703,18 +685,15 @@ class ChatMessage {
   final bool fromUser;
   final DateTime timestamp;
 
-  ChatMessage({
-    required this.text,
-    required this.fromUser,
-    DateTime? timestamp,
-  }) : timestamp = timestamp ?? DateTime.now();
+  ChatMessage({required this.text, required this.fromUser, DateTime? timestamp})
+    : timestamp = timestamp ?? DateTime.now();
 
   String get timeLabel {
     final hour = timestamp.hour == 0
         ? 12
         : timestamp.hour > 12
-            ? timestamp.hour - 12
-            : timestamp.hour;
+        ? timestamp.hour - 12
+        : timestamp.hour;
     final minute = timestamp.minute.toString().padLeft(2, '0');
     final period = timestamp.hour >= 12 ? 'PM' : 'AM';
     return '$hour:$minute $period';

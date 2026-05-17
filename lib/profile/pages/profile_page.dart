@@ -32,30 +32,65 @@ class ProfilePage extends StatelessWidget {
         children: [
           const SizedBox(height: 10),
 
-          const Center(
-            child: CircleAvatar(
-              radius: 50,
-              backgroundColor: Colors.black12,
-              child: Icon(Icons.person, size: 55, color: Colors.black),
-            ),
-          ),
+          StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .doc(user?.uid)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-          const SizedBox(height: 15),
+              final data = snapshot.data?.data() as Map<String, dynamic>?;
+              final displayName = data?['name'] ?? user?.email ?? 'User';
+              final profileBio = data?['bio'] ?? '';
+              final photoUrl = data?['photoUrl'] ?? '';
 
-          Center(
-            child: Text(
-              user?.email ?? "User",
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-          ),
+              return Column(
+                children: [
+                  Center(
+                    child: CircleAvatar(
+                      radius: 50,
+                      backgroundColor: Colors.black12,
+                      backgroundImage: photoUrl.isNotEmpty
+                          ? NetworkImage(photoUrl)
+                          : null,
+                      child: photoUrl.isNotEmpty
+                          ? null
+                          : const Icon(
+                              Icons.person,
+                              size: 55,
+                              color: Colors.black,
+                            ),
+                    ),
+                  ),
 
-          const SizedBox(height: 5),
+                  const SizedBox(height: 15),
 
-          const Center(
-            child: Text(
-              "Traveler & Explorer",
-              style: TextStyle(color: Colors.grey, fontSize: 15),
-            ),
+                  Center(
+                    child: Text(
+                      displayName,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 5),
+
+                  Center(
+                    child: Text(
+                      profileBio.isNotEmpty
+                          ? profileBio
+                          : 'Traveler & Explorer',
+                      style: const TextStyle(color: Colors.grey, fontSize: 15),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
 
           const SizedBox(height: 18),
@@ -73,7 +108,8 @@ class ProfilePage extends StatelessWidget {
                     .snapshots(),
                 builder: (context, reviewsSnapshot) {
                   if (userSnapshot.connectionState == ConnectionState.waiting ||
-                      reviewsSnapshot.connectionState == ConnectionState.waiting) {
+                      reviewsSnapshot.connectionState ==
+                          ConnectionState.waiting) {
                     return const Center(
                       child: Padding(
                         padding: EdgeInsets.symmetric(vertical: 18.0),
@@ -82,11 +118,14 @@ class ProfilePage extends StatelessWidget {
                     );
                   }
 
-                  final userData = userSnapshot.data?.data() as Map<String, dynamic>?;
-                  final addedCount = (userData?['addedPlaces'] as List?)?.length ?? 0;
-                  final favoriteCount = (userData?['favoredPlaces'] as List?)?.length ?? 0;
+                  final userData =
+                      userSnapshot.data?.data() as Map<String, dynamic>?;
+                  final addedCount =
+                      (userData?['addedPlaces'] as List?)?.length ?? 0;
+                  final favoriteCount =
+                      (userData?['favoredPlaces'] as List?)?.length ?? 0;
                   final reviewCount = reviewsSnapshot.data?.docs.length ?? 0;
-                  
+
                   final isSuperUser = addedCount >= 4 && reviewCount >= 5;
 
                   return Container(
@@ -130,7 +169,9 @@ class ProfilePage extends StatelessWidget {
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    isSuperUser ? 'Super User' : 'Active Explorer',
+                                    isSuperUser
+                                        ? 'Super User'
+                                        : 'Active Explorer',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       color: isSuperUser
@@ -257,26 +298,18 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
-
-
   Widget _buildActivityStat(String label, String value) {
     return Expanded(
       child: Column(
         children: [
           Text(
             value,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 4),
           Text(
             label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Colors.black54,
-            ),
+            style: const TextStyle(fontSize: 12, color: Colors.black54),
             textAlign: TextAlign.center,
           ),
         ],

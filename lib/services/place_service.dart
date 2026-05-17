@@ -39,7 +39,9 @@ class PlaceService {
     final lower = name.toLowerCase();
     if (lower.contains('gym')) return Icons.fitness_center;
     if (lower.contains('arcade')) return Icons.sports_esports;
-    if (lower.contains('restaurant') || lower.contains('cafe') || lower.contains('food')) {
+    if (lower.contains('restaurant') ||
+        lower.contains('cafe') ||
+        lower.contains('food')) {
       return Icons.restaurant;
     }
     return Icons.location_on;
@@ -60,10 +62,7 @@ class PlaceService {
 
     double a =
         (sin(latDelta / 2) * sin(latDelta / 2)) +
-        (cos(latFrom) *
-            cos(latTo) *
-            sin(lonDelta / 2) *
-            sin(lonDelta / 2));
+        (cos(latFrom) * cos(latTo) * sin(lonDelta / 2) * sin(lonDelta / 2));
     double c = 2 * atan2(sqrt(a), sqrt(1 - a));
     double distance = EARTH_RADIUS * c;
 
@@ -92,9 +91,12 @@ class PlaceService {
     });
 
     try {
-      final response = await http.get(uri, headers: {
-        'User-Agent': 'LikeALocalApp/1.0 (https://likealocal.example)'
-      });
+      final response = await http.get(
+        uri,
+        headers: {
+          'User-Agent': 'LikeALocalApp/1.0 (https://likealocal.example)',
+        },
+      );
       if (response.statusCode != 200) {
         return '';
       }
@@ -103,7 +105,12 @@ class PlaceService {
       final address = body['address'] as Map<String, dynamic>?;
       if (address == null) return '';
 
-      final city = address['city'] ?? address['town'] ?? address['village'] ?? address['suburb'] ?? address['hamlet'];
+      final city =
+          address['city'] ??
+          address['town'] ??
+          address['village'] ??
+          address['suburb'] ??
+          address['hamlet'];
       final state = address['state'] ?? address['county'];
       final formatted = [city, state]
           .where((part) => part != null && part.toString().trim().isNotEmpty)
