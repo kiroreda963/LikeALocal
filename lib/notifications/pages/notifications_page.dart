@@ -10,13 +10,7 @@ import '../../services/place_service.dart';
 import '../../Providers/PlaceProvider.dart';
 import '../../messaging/pages/chat_screen.dart';
 
-enum NotificationType {
-  newPlace,
-  message,
-  review,
-  superUser,
-  nearbyPlace,
-}
+enum NotificationType { newPlace, message, review, superUser, nearbyPlace }
 
 class NotificationEntry {
   final String id;
@@ -110,7 +104,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }).toList();
   }
 
-  Future<List<NotificationEntry>> _fetchMessageNotifications(String userId) async {
+  Future<List<NotificationEntry>> _fetchMessageNotifications(
+    String userId,
+  ) async {
     final snapshot = await FirebaseFirestore.instance
         .collection('conversations')
         .where('participants', arrayContains: userId)
@@ -128,19 +124,23 @@ class _NotificationsPageState extends State<NotificationsPage> {
       if (lastSenderId == userId) continue;
 
       final conversation = ConversationModel.fromDoc(doc, userId);
-      entries.add(NotificationEntry(
-        id: 'message_${doc.id}',
-        type: NotificationType.message,
-        title: 'New message from ${conversation.participantName}',
-        subtitle: lastMessage,
-        createdAt: conversation.lastMessageTime.toDate().toLocal(),
-      ));
+      entries.add(
+        NotificationEntry(
+          id: 'message_${doc.id}',
+          type: NotificationType.message,
+          title: 'New message from ${conversation.participantName}',
+          subtitle: lastMessage,
+          createdAt: conversation.lastMessageTime.toDate().toLocal(),
+        ),
+      );
     }
 
     return entries;
   }
 
-  Future<List<NotificationEntry>> _fetchReviewNotifications(String userId) async {
+  Future<List<NotificationEntry>> _fetchReviewNotifications(
+    String userId,
+  ) async {
     final placeSnapshot = await FirebaseFirestore.instance
         .collection('places')
         .where('authorId', isEqualTo: userId)
@@ -165,22 +165,29 @@ class _NotificationsPageState extends State<NotificationsPage> {
         final time = rawCreatedAt is Timestamp
             ? rawCreatedAt.toDate().toLocal()
             : DateTime.now();
-        final authorName = (reviewDoc.data()['userName'] as String?)?.trim() ?? 'Someone';
-        final reviewText = (reviewDoc.data()['reviewText'] as String?)?.trim() ?? '';
-        entries.add(NotificationEntry(
-          id: 'review_${place.id}_${reviewDoc.id}',
-          type: NotificationType.review,
-          title: 'New review for ${place.placeName}',
-          subtitle: '$authorName wrote: ${reviewText.isEmpty ? 'A new review was added.' : reviewText}',
-          createdAt: time,
-        ));
+        final authorName =
+            (reviewDoc.data()['userName'] as String?)?.trim() ?? 'Someone';
+        final reviewText =
+            (reviewDoc.data()['reviewText'] as String?)?.trim() ?? '';
+        entries.add(
+          NotificationEntry(
+            id: 'review_${place.id}_${reviewDoc.id}',
+            type: NotificationType.review,
+            title: 'New review for ${place.placeName}',
+            subtitle:
+                '$authorName wrote: ${reviewText.isEmpty ? 'A new review was added.' : reviewText}',
+            createdAt: time,
+          ),
+        );
       }
     }
 
     return entries;
   }
 
-  Future<List<NotificationEntry>> _fetchSuperUserNotification(String userId) async {
+  Future<List<NotificationEntry>> _fetchSuperUserNotification(
+    String userId,
+  ) async {
     final userDoc = await FirebaseFirestore.instance
         .collection('users')
         .doc(userId)
@@ -196,16 +203,21 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final isSuperUser = addedPlaces.length >= 4 && reviewCount >= 5;
     if (!isSuperUser) return [];
 
-    return [NotificationEntry(
-      id: 'super_user_$userId',
-      type: NotificationType.superUser,
-      title: 'Super User unlocked!',
-      subtitle: 'You have added ${addedPlaces.length} places and written $reviewCount reviews.',
-      createdAt: DateTime.now(),
-    )];
+    return [
+      NotificationEntry(
+        id: 'super_user_$userId',
+        type: NotificationType.superUser,
+        title: 'Super User unlocked!',
+        subtitle:
+            'You have added ${addedPlaces.length} places and written $reviewCount reviews.',
+        createdAt: DateTime.now(),
+      ),
+    ];
   }
 
-  Future<List<NotificationEntry>> _fetchNearbyPlaceNotification(String userId) async {
+  Future<List<NotificationEntry>> _fetchNearbyPlaceNotification(
+    String userId,
+  ) async {
     if (!await Geolocator.isLocationServiceEnabled()) {
       return [];
     }
@@ -214,14 +226,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
-    if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
       return [];
     }
 
     final position = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-      ),
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
     );
     if (!mounted) {
       return [];
@@ -246,7 +257,10 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
     for (final place in places) {
       final placeLocation = LatLng(place.latitude, place.longitude);
-      final distance = PlaceService.calculateDistance(currentLocation, placeLocation);
+      final distance = PlaceService.calculateDistance(
+        currentLocation,
+        placeLocation,
+      );
       if (closestDistance == null || distance < closestDistance) {
         closestDistance = distance;
         closest = place;
@@ -257,13 +271,16 @@ class _NotificationsPageState extends State<NotificationsPage> {
       return [];
     }
 
-    return [NotificationEntry(
-      id: 'nearby_place_${closest.id}',
-      type: NotificationType.nearbyPlace,
-      title: 'You are nearby ${closest.placeName}',
-      subtitle: 'Only ${PlaceService.formatDistance(closestDistance)} away from a nearby spot.',
-      createdAt: DateTime.now(),
-    )];
+    return [
+      NotificationEntry(
+        id: 'nearby_place_${closest.id}',
+        type: NotificationType.nearbyPlace,
+        title: 'You are nearby ${closest.placeName}',
+        subtitle:
+            'Only ${PlaceService.formatDistance(closestDistance)} away from a nearby spot.',
+        createdAt: DateTime.now(),
+      ),
+    ];
   }
 
   IconData _iconForType(NotificationType type) {
@@ -339,7 +356,10 @@ class _NotificationsPageState extends State<NotificationsPage> {
           return ListTile(
             leading: CircleAvatar(
               backgroundColor: Colors.grey.shade100,
-              child: Icon(_iconForType(notification.type), color: Colors.black87),
+              child: Icon(
+                _iconForType(notification.type),
+                color: Colors.black87,
+              ),
             ),
             title: Text(notification.title),
             subtitle: Text(notification.subtitle),
@@ -350,7 +370,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
             onTap: () async {
               final parts = notification.id.split('_');
               final type = notification.type;
-              
+
               if (type == NotificationType.message) {
                 final conversationId = parts.last;
                 final user = FirebaseAuth.instance.currentUser;
@@ -365,17 +385,28 @@ class _NotificationsPageState extends State<NotificationsPage> {
                     ),
                   );
                 }
-              } else if (type == NotificationType.newPlace || type == NotificationType.nearbyPlace) {
+              } else if (type == NotificationType.newPlace ||
+                  type == NotificationType.nearbyPlace) {
                 final placeId = parts.last;
-                final placesProvider = Provider.of<PlacesProvider>(context, listen: false);
-                final place = placesProvider.places.where((p) => p.id == placeId).firstOrNull;
+                final placesProvider = Provider.of<PlacesProvider>(
+                  context,
+                  listen: false,
+                );
+                final place = placesProvider.places
+                    .where((p) => p.id == placeId)
+                    .firstOrNull;
                 if (place != null) {
                   placesProvider.openPlaceOnMap(place);
                 }
               } else if (type == NotificationType.review) {
                 final placeId = parts[1]; // review_{placeId}_{reviewId}
-                final placesProvider = Provider.of<PlacesProvider>(context, listen: false);
-                final place = placesProvider.places.where((p) => p.id == placeId).firstOrNull;
+                final placesProvider = Provider.of<PlacesProvider>(
+                  context,
+                  listen: false,
+                );
+                final place = placesProvider.places
+                    .where((p) => p.id == placeId)
+                    .firstOrNull;
                 if (place != null) {
                   placesProvider.openReviewsOnMap(place);
                 }

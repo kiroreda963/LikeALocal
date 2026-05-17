@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:likealocal/messaging/pages/inbox_screen.dart';
 import '../../notifications/pages/notifications_page.dart';
@@ -48,9 +49,7 @@ class TopBar extends StatelessWidget implements PreferredSizeWidget {
           onPressed: () {
             Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (_) => const NotificationsPage(),
-              ),
+              MaterialPageRoute(builder: (_) => const NotificationsPage()),
             );
           },
         ),
@@ -58,9 +57,36 @@ class TopBar extends StatelessWidget implements PreferredSizeWidget {
       ],
       leading: Padding(
         padding: const EdgeInsets.only(left: 12),
-        child: CircleAvatar(
-          backgroundColor: Colors.grey.shade300,
-          child: const Icon(Icons.person, color: Colors.grey),
+        child: Builder(
+          builder: (context) {
+            final currentUser = FirebaseAuth.instance.currentUser;
+            if (currentUser == null) {
+              return CircleAvatar(
+                backgroundColor: Colors.grey.shade300,
+                child: const Icon(Icons.person, color: Colors.grey),
+              );
+            }
+
+            return StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(currentUser.uid)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                final data = snapshot.data?.data() as Map<String, dynamic>?;
+                final photoUrl = data?['photoUrl'] as String? ?? '';
+
+                if (photoUrl.isNotEmpty) {
+                  return CircleAvatar(backgroundImage: NetworkImage(photoUrl));
+                }
+
+                return CircleAvatar(
+                  backgroundColor: Colors.grey.shade300,
+                  child: const Icon(Icons.person, color: Colors.grey),
+                );
+              },
+            );
+          },
         ),
       ),
     );
