@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+
 class AddPlacePage extends StatefulWidget {
   const AddPlacePage({super.key});
 
@@ -116,6 +117,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
     });
 
     try {
+
       await FirebaseFirestore.instance.collection('places').add({
         'placeName': placeName,
         'description': description,
@@ -126,6 +128,65 @@ class _AddPlacePageState extends State<AddPlacePage> {
         'longitude': longitude,
         'createdAt': FieldValue.serverTimestamp(),
       });
+
+      String imageUrl = imageUrlFromInput;
+
+      
+      if (selectedImageBytes != null && selectedImageName != null) {
+        final fileName =
+            'places/${DateTime.now().millisecondsSinceEpoch}_$selectedImageName';
+        final ref = FirebaseStorage.instance.ref().child(fileName);
+
+        await ref.putData(selectedImageBytes!);
+        imageUrl = await ref.getDownloadURL();
+      }
+
+      // Get user name and ID
+      final authorId = currentUser.uid;
+
+      // Save place to Firestore
+      final placeRef = await FirebaseFirestore.instance
+          .collection('places')
+          .add({
+            'placeName': placeName,
+            'authorId': authorId,
+            'description': description,
+            'category': selectedCategory,
+            'priceRange': selectedPriceRange,
+            'imageUrl': imageUrl,
+            'imageName': selectedImageName,
+            'latitude': latitude,
+            'longitude': longitude,
+            'rating': 0.0,
+            'reviewCount': 0,
+            'favoredByUsers': [],
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(authorId)
+          .set({
+            'addedPlaces': FieldValue.arrayUnion([placeRef.id]),
+           }, SetOptions(merge: true));
+
+      // Add place ID to user's addedPlaces array
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(authorId)
+          .update({
+            'addedPlaces': FieldValue.arrayUnion([placeRef.id]),
+          })
+          .catchError((e) {
+            // If user document doesn't exist, create it with addedPlaces
+            return FirebaseFirestore.instance
+                .collection('users')
+                .doc(authorId)
+                .set({
+                  'addedPlaces': [placeRef.id],
+                }, SetOptions(merge: true));
+          });
+
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Place published successfully')),

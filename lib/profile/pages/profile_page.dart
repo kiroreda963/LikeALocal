@@ -106,7 +106,27 @@ class ProfilePage extends StatelessWidget {
                   context,
                   icon: Icons.bookmark_border,
                   title: "My Places",
+
                   page: const MyPlacesPage(),
+
+                  page: const SavedPlacesPage(),
+                ),
+
+                _divider(),
+
+                _buildTile(
+                  context,
+                  icon: Icons.chat_outlined,
+                  title: "Chat & Privacy",
+                  page: const ChatSettingsPage(),
+                ),
+                _divider(),
+                _buildTile(
+                  context,
+                  icon: Icons.workspace_premium,
+                  title: "Subscriptions",
+                  page: const SubscriptionPage(),
+
                 ),
               ],
             ),

@@ -63,6 +63,7 @@ class PlacesProvider with ChangeNotifier {
   }
 
   // ➕ Add new place
+
   Future<void> addPlace(Place place) async {
     try {
       await _firestore.collection('places').add(place.toMap());
@@ -72,7 +73,25 @@ class PlacesProvider with ChangeNotifier {
       _error = e.toString();
       notifyListeners();
     }
+
+Future<void> addPlace(Place place, String userId) async {
+  try {
+    // Create the place
+    final docRef = await _firestore
+        .collection('places')
+        .add(place.toMap());
+
+    // Save place ID inside user's addedPlaces array
+    await _firestore.collection('users').doc(userId).set({
+      'addedPlaces': FieldValue.arrayUnion([docRef.id]),
+    }, SetOptions(merge: true));
+
+  } catch (e) {
+    _error = e.toString();
+    notifyListeners();
+
   }
+}
 
   // 🔍 Get single place by id (optional)
   Future<Place?> getPlaceById(String id) async {
