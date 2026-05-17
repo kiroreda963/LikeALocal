@@ -9,6 +9,8 @@ class ConversationModel {
   final Timestamp lastMessageTime;
   final bool isOnline;
   final bool isAI;
+  final bool isGroup;
+  final List<String> participants;
 
   ConversationModel({
     required this.id,
@@ -19,6 +21,8 @@ class ConversationModel {
     required this.lastMessageTime,
     required this.isOnline,
     this.isAI = false,
+    this.isGroup = false,
+    this.participants = const [],
   });
 
   factory ConversationModel.fromDoc(
@@ -51,6 +55,24 @@ class ConversationModel {
             data['lastMessageTime'] as Timestamp? ?? Timestamp.now(),
         isOnline: data['isOnline'] as bool? ?? true,
         isAI: true,
+        participants: List<String>.from((data['participants'] as List?) ?? []),
+      );
+    }
+
+    // ── Group conversation: preserve the group name as-is. ────────────────
+    if (data['isGroup'] == true) {
+      return ConversationModel(
+        id: docId,
+        participantId: docId,
+        participantName: data['participantName'] as String? ?? 'Group',
+        participantAvatar: data['participantAvatar'] as String? ?? '',
+        lastMessage: data['lastMessage'] as String? ?? '',
+        lastMessageTime:
+            data['lastMessageTime'] as Timestamp? ?? Timestamp.now(),
+        isOnline: false,
+        isAI: false,
+        isGroup: true,
+        participants: List<String>.from((data['participants'] as List?) ?? []),
       );
     }
 
@@ -97,6 +119,7 @@ class ConversationModel {
       lastMessageTime: data['lastMessageTime'] as Timestamp? ?? Timestamp.now(),
       isOnline: isOnline,
       isAI: false,
+      participants: participants,
     );
   }
 }

@@ -8,6 +8,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:provider/provider.dart';
 import '../main.dart'; // for navigatorKey
 import '../messaging/pages/chat_screen.dart';
+import '../profile/pages/friends_groups_page.dart';
 import '../Providers/PlaceProvider.dart';
 
 class MessageNotificationService {
@@ -19,16 +20,21 @@ class MessageNotificationService {
       FlutterLocalNotificationsPlugin();
 
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _subscription;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+  _friendRequestSubscription;
   final Map<String, Timestamp> _lastNotifiedByConversation = {};
+  final Set<String> _notifiedFriendRequests = {};
   bool _initialized = false;
   bool _skipInitialSnapshot = true;
+  bool _skipInitialFriendRequestSnapshot = true;
   String? _listeningUserId;
 
   Future<void> initialize() async {
     if (_initialized) return;
 
-    const androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
     const iosSettings = DarwinInitializationSettings();
 
     await _plugin.initialize(
@@ -49,9 +55,10 @@ class MessageNotificationService {
       },
     );
 
-    final android =
-        _plugin.resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
+    final android = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
     await android?.requestNotificationsPermission();
 
     _initialized = true;
@@ -79,17 +86,32 @@ class MessageNotificationService {
     } else if (type == 'place_added' || type == 'nearby') {
       final placeId = data['placeId'] as String?;
       if (placeId != null) {
-        final placesProvider = Provider.of<PlacesProvider>(context, listen: false);
-        final place = placesProvider.places.where((p) => p.id == placeId).firstOrNull;
+        final placesProvider = Provider.of<PlacesProvider>(
+          context,
+          listen: false,
+        );
+        final place = placesProvider.places
+            .where((p) => p.id == placeId)
+            .firstOrNull;
         if (place != null) {
           placesProvider.openPlaceOnMap(place);
         }
       }
+    } else if (type == 'friend_request') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const FriendsGroupsPage()),
+      );
     } else if (type == 'new_review') {
       final placeId = data['placeId'] as String?;
       if (placeId != null) {
-        final placesProvider = Provider.of<PlacesProvider>(context, listen: false);
-        final place = placesProvider.places.where((p) => p.id == placeId).firstOrNull;
+        final placesProvider = Provider.of<PlacesProvider>(
+          context,
+          listen: false,
+        );
+        final place = placesProvider.places
+            .where((p) => p.id == placeId)
+            .firstOrNull;
         if (place != null) {
           placesProvider.openReviewsOnMap(place);
         }
@@ -109,15 +131,33 @@ class MessageNotificationService {
         .collection('conversations')
         .where('participants', arrayContains: userId)
         .snapshots()
-        .listen(_onConversationsUpdate, onError: (Object e) {
-      debugPrint('Message notification listener error: $e');
-    });
+        .listen(
+          _onConversationsUpdate,
+          onError: (Object e) {
+            debugPrint('Message notification listener error: $e');
+          },
+        );
+
+    _friendRequestSubscription = FirebaseFirestore.instance
+        .collection('friend_requests')
+        .where('receiverId', isEqualTo: userId)
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .listen(
+          _onFriendRequestsUpdate,
+          onError: (Object e) {
+            debugPrint('Friend request notification listener error: $e');
+          },
+        );
   }
 
   void stopListening() {
     _subscription?.cancel();
     _subscription = null;
+    _friendRequestSubscription?.cancel();
+    _friendRequestSubscription = null;
     _listeningUserId = null;
+    _notifiedFriendRequests.clear();
   }
 
   void _onConversationsUpdate(QuerySnapshot<Map<String, dynamic>> snapshot) {
@@ -161,11 +201,44 @@ class MessageNotificationService {
         id: doc.id.hashCode,
         title: senderName,
         body: preview,
-        payload: jsonEncode({
-          'type': 'message',
-          'conversationId': doc.id,
-        }),
+        payload: jsonEncode({'type': 'message', 'conversationId': doc.id}),
       );
+    }
+  }
+
+  void _onFriendRequestsUpdate(QuerySnapshot<Map<String, dynamic>> snapshot) {
+    if (_skipInitialFriendRequestSnapshot) {
+      _skipInitialFriendRequestSnapshot = false;
+      for (final doc in snapshot.docs) {
+        _notifiedFriendRequests.add(doc.id);
+      }
+      return;
+    }
+
+    for (final change in snapshot.docChanges) {
+      if (change.type != DocumentChangeType.added) continue;
+      final doc = change.doc;
+      if (_notifiedFriendRequests.contains(doc.id)) continue;
+
+      final data = doc.data();
+      if (data == null) continue;
+      final senderId = data['senderId'] as String?;
+      if (senderId == null) continue;
+
+      _notifiedFriendRequests.add(doc.id);
+
+      FirebaseFirestore.instance.collection('users').doc(senderId).get().then((
+        userDoc,
+      ) {
+        final userData = userDoc.data() as Map<String, dynamic>?;
+        final senderName = userData?['name'] as String? ?? 'Someone';
+        _showNotification(
+          id: doc.id.hashCode,
+          title: 'Friend request received',
+          body: '$senderName sent you a friend request.',
+          payload: jsonEncode({'type': 'friend_request'}),
+        );
+      });
     }
   }
 

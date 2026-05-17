@@ -9,8 +9,16 @@ import '../../Models/place_model.dart';
 import '../../services/place_service.dart';
 import '../../Providers/PlaceProvider.dart';
 import '../../messaging/pages/chat_screen.dart';
+import '../../profile/pages/friends_groups_page.dart';
 
-enum NotificationType { newPlace, message, review, superUser, nearbyPlace }
+enum NotificationType {
+  newPlace,
+  message,
+  review,
+  superUser,
+  nearbyPlace,
+  friendRequest,
+}
 
 class NotificationEntry {
   final String id;
@@ -66,6 +74,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
       final entries = <NotificationEntry>[];
       entries.addAll(await _fetchSuperUserNotification(user.uid));
       entries.addAll(await _fetchMessageNotifications(user.uid));
+      entries.addAll(await _fetchFriendRequestNotifications(user.uid));
       entries.addAll(await _fetchReviewNotifications(user.uid));
       entries.addAll(await _fetchNearbyPlaceNotification(user.uid));
       entries.addAll(await _fetchNewPlaceNotifications());
@@ -131,6 +140,49 @@ class _NotificationsPageState extends State<NotificationsPage> {
           title: 'New message from ${conversation.participantName}',
           subtitle: lastMessage,
           createdAt: conversation.lastMessageTime.toDate().toLocal(),
+        ),
+      );
+    }
+
+    return entries;
+  }
+
+  Future<List<NotificationEntry>> _fetchFriendRequestNotifications(
+    String userId,
+  ) async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('friend_requests')
+        .where('receiverId', isEqualTo: userId)
+        .where('status', isEqualTo: 'pending')
+        .orderBy('createdAt', descending: true)
+        .limit(10)
+        .get();
+
+    final entries = <NotificationEntry>[];
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      final senderId = data['senderId'] as String?;
+      if (senderId == null) continue;
+
+      final senderDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(senderId)
+          .get();
+      final senderData = senderDoc.data() as Map<String, dynamic>?;
+      final senderName = senderData?['name'] as String? ?? 'A friend';
+
+      final rawCreatedAt = data['createdAt'];
+      final createdAt = rawCreatedAt is Timestamp
+          ? rawCreatedAt.toDate().toLocal()
+          : DateTime.now();
+
+      entries.add(
+        NotificationEntry(
+          id: 'friend_request_${doc.id}',
+          type: NotificationType.friendRequest,
+          title: 'Friend request from $senderName',
+          subtitle: 'Tap to manage pending requests.',
+          createdAt: createdAt,
         ),
       );
     }
@@ -295,6 +347,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
         return Icons.location_on;
       case NotificationType.newPlace:
         return Icons.place;
+      case NotificationType.friendRequest:
+        return Icons.person_add;
     }
   }
 
@@ -398,6 +452,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 if (place != null) {
                   placesProvider.openPlaceOnMap(place);
                 }
+              } else if (type == NotificationType.friendRequest) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const FriendsGroupsPage()),
+                );
               } else if (type == NotificationType.review) {
                 final placeId = parts[1]; // review_{placeId}_{reviewId}
                 final placesProvider = Provider.of<PlacesProvider>(

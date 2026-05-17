@@ -9,6 +9,7 @@ class MessageBubble extends StatelessWidget {
   final bool isMine;
   final Timestamp timestamp;
   final String? senderAvatar;
+  final String? senderName;
   final bool showAvatar;
   final String? placeId;
 
@@ -18,6 +19,7 @@ class MessageBubble extends StatelessWidget {
     required this.isMine,
     required this.timestamp,
     this.senderAvatar,
+    this.senderName,
     this.showAvatar = true,
     this.placeId,
   });
@@ -34,8 +36,9 @@ class MessageBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Row(
-        mainAxisAlignment:
-            isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isMine
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isMine && showAvatar) ...[
@@ -45,15 +48,29 @@ class MessageBubble extends StatelessWidget {
             const SizedBox(width: 40),
           ],
           Column(
-            crossAxisAlignment:
-                isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            crossAxisAlignment: isMine
+                ? CrossAxisAlignment.end
+                : CrossAxisAlignment.start,
             children: [
+              if (senderName != null && senderName!.isNotEmpty) ...[
+                Text(
+                  senderName!,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+              ],
               Container(
                 constraints: BoxConstraints(
                   maxWidth: MediaQuery.of(context).size.width * 0.65,
                 ),
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 10),
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: isMine ? Colors.black : Colors.white,
                   borderRadius: BorderRadius.only(
@@ -84,10 +101,7 @@ class MessageBubble extends StatelessWidget {
               const SizedBox(height: 3),
               Text(
                 _formatTime(timestamp),
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey.shade500,
-                ),
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
               ),
             ],
           ),
@@ -105,7 +119,12 @@ class MessageBubble extends StatelessWidget {
           return const SizedBox(
             width: 100,
             height: 50,
-            child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Colors.grey)),
+            child: Center(
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.grey,
+              ),
+            ),
           );
         }
         final data = snapshot.data!.data() as Map<String, dynamic>?;
@@ -118,8 +137,14 @@ class MessageBubble extends StatelessWidget {
         return InkWell(
           onTap: () {
             final place = Place.fromMap(data, id);
-            Provider.of<PlacesProvider>(context, listen: false).openPlaceOnMap(place);
-            Navigator.popUntil(context, (route) => route.isFirst); // Go back to main shell
+            Provider.of<PlacesProvider>(
+              context,
+              listen: false,
+            ).openPlaceOnMap(place);
+            Navigator.popUntil(
+              context,
+              (route) => route.isFirst,
+            ); // Go back to main shell
           },
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -183,8 +208,7 @@ class MessageBubble extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: senderAvatar != null && senderAvatar!.isNotEmpty
           ? Image.network(senderAvatar!, fit: BoxFit.cover)
-          : const Icon(Icons.smart_toy_outlined,
-              color: Colors.white, size: 18),
+          : const Icon(Icons.smart_toy_outlined, color: Colors.white, size: 18),
     );
   }
 }

@@ -57,10 +57,7 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
-          _buildFriendsTab(),
-          _buildGroupsTab(),
-        ],
+        children: [_buildFriendsTab(), _buildGroupsTab()],
       ),
     );
   }
@@ -75,7 +72,7 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
         if (_isSearching)
           Expanded(child: _buildSearchResultsList())
         else ...[
-          // Pending Requests Section
+          // Incoming Pending Requests Section
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('friend_requests')
@@ -96,7 +93,10 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
                   children: [
                     const Text(
                       'Pending Requests',
-                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.amber),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.amber,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     ...requests.map((doc) {
@@ -109,7 +109,8 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
                             .get(),
                         builder: (context, userSnap) {
                           if (!userSnap.hasData) return const SizedBox();
-                          final userData = userSnap.data!.data() as Map<String, dynamic>?;
+                          final userData =
+                              userSnap.data!.data() as Map<String, dynamic>?;
                           final name = userData?['name'] ?? 'User';
 
                           return ListTile(
@@ -118,11 +119,18 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 IconButton(
-                                  icon: const Icon(Icons.check, color: Colors.green),
-                                  onPressed: () => _acceptFriendRequest(doc.id, senderId),
+                                  icon: const Icon(
+                                    Icons.check,
+                                    color: Colors.green,
+                                  ),
+                                  onPressed: () =>
+                                      _acceptFriendRequest(doc.id, senderId),
                                 ),
                                 IconButton(
-                                  icon: const Icon(Icons.clear, color: Colors.red),
+                                  icon: const Icon(
+                                    Icons.clear,
+                                    color: Colors.red,
+                                  ),
                                   onPressed: () => _rejectFriendRequest(doc.id),
                                 ),
                               ],
@@ -136,7 +144,65 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
               );
             },
           ),
-          
+
+          // Sent Pending Requests Section
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('friend_requests')
+                .where('senderId', isEqualTo: currentUser.uid)
+                .where('status', isEqualTo: 'pending')
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                return const SizedBox();
+              }
+              final sentRequests = snapshot.data!.docs;
+
+              return Container(
+                color: Colors.blue.shade50,
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Sent Requests',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ...sentRequests.map((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final receiverId = data['receiverId'];
+                      return FutureBuilder<DocumentSnapshot>(
+                        future: FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(receiverId)
+                            .get(),
+                        builder: (context, userSnap) {
+                          if (!userSnap.hasData) return const SizedBox();
+                          final userData =
+                              userSnap.data!.data() as Map<String, dynamic>?;
+                          final name = userData?['name'] ?? 'User';
+
+                          return ListTile(
+                            title: Text(name),
+                            subtitle: const Text('Pending'),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.cancel, color: Colors.red),
+                              onPressed: () => _cancelFriendRequest(doc.id),
+                            ),
+                          );
+                        },
+                      );
+                    }).toList(),
+                  ],
+                ),
+              );
+            },
+          ),
+
           // Friends List Section
           Expanded(
             child: StreamBuilder<DocumentSnapshot>(
@@ -155,7 +221,8 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
                   return _buildEmptyState(
                     icon: Icons.people_outline,
                     title: 'No friends yet',
-                    subtitle: 'Search for friends above to connect and share places!',
+                    subtitle:
+                        'Search for friends above to connect and share places!',
                   );
                 }
 
@@ -170,7 +237,8 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
                           .get(),
                       builder: (context, userSnap) {
                         if (!userSnap.hasData) return const SizedBox();
-                        final data = userSnap.data!.data() as Map<String, dynamic>?;
+                        final data =
+                            userSnap.data!.data() as Map<String, dynamic>?;
                         if (data == null) return const SizedBox();
 
                         return _buildUserTile(
@@ -180,6 +248,18 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
                           onTap: () {
                             _openChat(friends[index], data['name'] ?? 'User');
                           },
+                          trailing: IconButton(
+                            icon: const Icon(
+                              Icons.remove_circle_outline,
+                              color: Colors.red,
+                            ),
+                            tooltip: 'Remove friend',
+                            onPressed: () => _removeFriend(
+                              currentUser.uid,
+                              friends[index],
+                              data['name'] ?? 'User',
+                            ),
+                          ),
                         );
                       },
                     );
@@ -227,7 +307,7 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
               if (!snapshot.hasData) {
                 return const Center(child: CircularProgressIndicator());
               }
-              
+
               // Filter for groups in memory if isGroup field is missing, or just assume conversations with > 2 participants or specific flag.
               final groups = snapshot.data!.docs.where((doc) {
                 final data = doc.data() as Map<String, dynamic>;
@@ -238,7 +318,8 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
                 return _buildEmptyState(
                   icon: Icons.group_outlined,
                   title: 'No groups yet',
-                  subtitle: 'Create a group to plan trips and share places with friends!',
+                  subtitle:
+                      'Create a group to plan trips and share places with friends!',
                 );
               }
 
@@ -248,10 +329,15 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
                 itemBuilder: (context, index) {
                   final data = groups[index].data() as Map<String, dynamic>;
                   return _buildGroupTile(
-                    name: data['participantName'] ?? 'Group', // Reuse field or use groupName
+                    name:
+                        data['participantName'] ??
+                        'Group', // Reuse field or use groupName
                     memberCount: (data['participants'] as List).length,
                     onTap: () {
-                      final conversation = ConversationModel.fromDoc(groups[index], currentUser.uid);
+                      final conversation = ConversationModel.fromDoc(
+                        groups[index],
+                        currentUser.uid,
+                      );
                       Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -262,6 +348,7 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
                         ),
                       );
                     },
+                    onAddMembers: () => _showAddMembersDialog(groups[index]),
                   );
                 },
               );
@@ -315,8 +402,38 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
 
   Future<void> _searchUsers(String query) async {
     setState(() => _isSearching = true);
-    
-    // Search by email or name
+
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    final currentUserDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUser.uid)
+        .get();
+    final friends = List<String>.from(currentUserDoc.data()?['friends'] ?? []);
+
+    final sentRequestsSnapshot = await FirebaseFirestore.instance
+        .collection('friend_requests')
+        .where('senderId', isEqualTo: currentUser.uid)
+        .where('status', isEqualTo: 'pending')
+        .get();
+    final receivedRequestsSnapshot = await FirebaseFirestore.instance
+        .collection('friend_requests')
+        .where('receiverId', isEqualTo: currentUser.uid)
+        .where('status', isEqualTo: 'pending')
+        .get();
+
+    final pendingUserIds = <String>{
+      ...sentRequestsSnapshot.docs
+          .map((doc) => doc.data()['receiverId'] as String?)
+          .whereType<String>(),
+      ...receivedRequestsSnapshot.docs
+          .map((doc) => doc.data()['senderId'] as String?)
+          .whereType<String>(),
+    };
+
+    final excludedUserIds = {...friends, ...pendingUserIds, currentUser.uid};
+
     final snapshot = await FirebaseFirestore.instance
         .collection('users')
         .where('email', isGreaterThanOrEqualTo: query)
@@ -326,7 +443,7 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
 
     final users = snapshot.docs
         .map((doc) => local_user.User.fromMap(doc.data(), doc.id))
-        .where((user) => user.uid != FirebaseAuth.instance.currentUser?.uid) // Exclude self
+        .where((user) => !excludedUserIds.contains(user.uid))
         .toList();
 
     setState(() {
@@ -362,12 +479,15 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
     if (currentUser == null) return;
 
     // Check if already friends
-    final userDoc = await FirebaseFirestore.instance.collection('users').doc(currentUser.uid).get();
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUser.uid)
+        .get();
     final friends = List<String>.from(userDoc.data()?['friends'] ?? []);
     if (friends.contains(targetUserId)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Already friends!')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Already friends!')));
       return;
     }
 
@@ -380,12 +500,12 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
         .get();
 
     if (existing.docs.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Request already pending!')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Request already pending!')));
       return;
     }
-    
+
     await FirebaseFirestore.instance.collection('friend_requests').add({
       'senderId': currentUser.uid,
       'receiverId': targetUserId,
@@ -393,9 +513,9 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
       'createdAt': Timestamp.now(),
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Friend request sent!')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Friend request sent!')));
   }
 
   Future<void> _acceptFriendRequest(String requestId, String senderId) async {
@@ -403,16 +523,20 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
     if (currentUser == null) return;
 
     final batch = FirebaseFirestore.instance.batch();
-    
+
     // Update request status
-    batch.update(FirebaseFirestore.instance.collection('friend_requests').doc(requestId), {
-      'status': 'accepted',
-    });
+    batch.update(
+      FirebaseFirestore.instance.collection('friend_requests').doc(requestId),
+      {'status': 'accepted'},
+    );
 
     // Add to current user's friends
-    batch.update(FirebaseFirestore.instance.collection('users').doc(currentUser.uid), {
-      'friends': FieldValue.arrayUnion([senderId]),
-    });
+    batch.update(
+      FirebaseFirestore.instance.collection('users').doc(currentUser.uid),
+      {
+        'friends': FieldValue.arrayUnion([senderId]),
+      },
+    );
 
     // Add to sender's friends
     batch.update(FirebaseFirestore.instance.collection('users').doc(senderId), {
@@ -421,18 +545,57 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
 
     await batch.commit();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Friend request accepted!')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Friend request accepted!')));
   }
 
   Future<void> _rejectFriendRequest(String requestId) async {
-    await FirebaseFirestore.instance.collection('friend_requests').doc(requestId).update({
-      'status': 'rejected',
+    await FirebaseFirestore.instance
+        .collection('friend_requests')
+        .doc(requestId)
+        .update({'status': 'rejected'});
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Friend request rejected.')));
+  }
+
+  Future<void> _cancelFriendRequest(String requestId) async {
+    await FirebaseFirestore.instance
+        .collection('friend_requests')
+        .doc(requestId)
+        .update({'status': 'cancelled'});
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Friend request cancelled.')));
+  }
+
+  Future<void> _removeFriend(
+    String currentUserId,
+    String friendId,
+    String friendName,
+  ) async {
+    final batch = FirebaseFirestore.instance.batch();
+
+    batch.update(
+      FirebaseFirestore.instance.collection('users').doc(currentUserId),
+      {
+        'friends': FieldValue.arrayRemove([friendId]),
+      },
+    );
+
+    batch.update(FirebaseFirestore.instance.collection('users').doc(friendId), {
+      'friends': FieldValue.arrayRemove([currentUserId]),
     });
 
+    await batch.commit();
+
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Friend request rejected.')),
+      SnackBar(
+        content: Text('$friendName has been removed from your friends.'),
+      ),
     );
   }
 
@@ -461,10 +624,15 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
         leading: CircleAvatar(
           backgroundColor: Colors.grey.shade200,
           backgroundImage: photoUrl != null ? NetworkImage(photoUrl) : null,
-          child: photoUrl == null ? const Icon(Icons.person, color: Colors.grey) : null,
+          child: photoUrl == null
+              ? const Icon(Icons.person, color: Colors.grey)
+              : null,
         ),
         title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(email, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+        subtitle: Text(
+          email,
+          style: const TextStyle(color: Colors.grey, fontSize: 12),
+        ),
         trailing: trailing,
       ),
     );
@@ -474,6 +642,7 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
     required String name,
     required int memberCount,
     required VoidCallback onTap,
+    required VoidCallback onAddMembers,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -495,8 +664,21 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
           child: const Icon(Icons.group, color: Color(0xFF143C23)),
         ),
         title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text('$memberCount members', style: const TextStyle(color: Colors.grey, fontSize: 12)),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+        subtitle: Text(
+          '$memberCount members',
+          style: const TextStyle(color: Colors.grey, fontSize: 12),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.person_add, size: 20, color: Colors.grey),
+              onPressed: onAddMembers,
+              tooltip: 'Add members',
+            ),
+            const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+          ],
+        ),
       ),
     );
   }
@@ -516,7 +698,11 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
             const SizedBox(height: 16),
             Text(
               title,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
@@ -554,7 +740,10 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
                       decoration: const InputDecoration(hintText: 'Group Name'),
                     ),
                     const SizedBox(height: 16),
-                    const Text('Select Friends', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Select Friends',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                     const SizedBox(height: 8),
                     Expanded(
                       child: StreamBuilder<DocumentSnapshot>(
@@ -563,12 +752,20 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
                             .doc(currentUser.uid)
                             .snapshots(),
                         builder: (context, snapshot) {
-                          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                          final userData = snapshot.data!.data() as Map<String, dynamic>?;
-                          final friends = List<String>.from(userData?['friends'] ?? []);
+                          if (!snapshot.hasData)
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
+                          final userData =
+                              snapshot.data!.data() as Map<String, dynamic>?;
+                          final friends = List<String>.from(
+                            userData?['friends'] ?? [],
+                          );
 
                           if (friends.isEmpty) {
-                            return const Text('No friends to add. Add friends first!');
+                            return const Text(
+                              'No friends to add. Add friends first!',
+                            );
                           }
 
                           return ListView.builder(
@@ -582,8 +779,11 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
                                     .doc(friendId)
                                     .get(),
                                 builder: (context, userSnap) {
-                                  if (!userSnap.hasData) return const SizedBox();
-                                  final data = userSnap.data!.data() as Map<String, dynamic>?;
+                                  if (!userSnap.hasData)
+                                    return const SizedBox();
+                                  final data =
+                                      userSnap.data!.data()
+                                          as Map<String, dynamic>?;
                                   final name = data?['name'] ?? 'User';
 
                                   return CheckboxListTile(
@@ -647,8 +847,129 @@ class _FriendsGroupsPageState extends State<FriendsGroupsPage>
       'creatorId': currentUser.uid,
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Group created!')),
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Group created!')));
+  }
+
+  void _showAddMembersDialog(DocumentSnapshot groupDoc) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        final selectedFriends = <String>{};
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Add Members'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: StreamBuilder<DocumentSnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(currentUser.uid)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const SizedBox(
+                        height: 100,
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
+
+                    final userData =
+                        snapshot.data!.data() as Map<String, dynamic>?;
+                    final friends = List<String>.from(
+                      userData?['friends'] ?? [],
+                    );
+                    final groupParticipants = List<String>.from(
+                      (groupDoc.data()
+                              as Map<String, dynamic>?)?['participants'] ??
+                          [],
+                    );
+
+                    final availableFriends = friends
+                        .where((id) => !groupParticipants.contains(id))
+                        .toList();
+
+                    if (availableFriends.isEmpty) {
+                      return const Text(
+                        'No additional friends available to add.',
+                      );
+                    }
+
+                    return ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: availableFriends.length,
+                      itemBuilder: (context, index) {
+                        final friendId = availableFriends[index];
+                        return FutureBuilder<DocumentSnapshot>(
+                          future: FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(friendId)
+                              .get(),
+                          builder: (context, userSnap) {
+                            if (!userSnap.hasData) return const SizedBox();
+                            final data =
+                                userSnap.data!.data() as Map<String, dynamic>?;
+                            final name = data?['name'] ?? 'User';
+
+                            return CheckboxListTile(
+                              title: Text(name),
+                              value: selectedFriends.contains(friendId),
+                              onChanged: (value) {
+                                setState(() {
+                                  if (value == true) {
+                                    selectedFriends.add(friendId);
+                                  } else {
+                                    selectedFriends.remove(friendId);
+                                  }
+                                });
+                              },
+                            );
+                          },
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: selectedFriends.isEmpty
+                      ? null
+                      : () async {
+                          await FirebaseFirestore.instance
+                              .collection('conversations')
+                              .doc(groupDoc.id)
+                              .update({
+                                'participants': FieldValue.arrayUnion(
+                                  selectedFriends.toList(),
+                                ),
+                              });
+
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Members added to group.'),
+                              ),
+                            );
+                          }
+                          Navigator.pop(context);
+                        },
+                  child: const Text('Add'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
