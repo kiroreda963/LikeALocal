@@ -279,10 +279,14 @@ class _SignupPageState extends State<SignupPage> {
               _phoneController.text,
             );
             print(error ?? 'Sign up successful');
-            if(error != null) {
+            if (error != null) {
+              if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text(error)),
               );
+            } else {
+              if (!context.mounted) return;
+              Navigator.pushReplacementNamed(context, '/home');
             }
           }),
           const SizedBox(height: 48),

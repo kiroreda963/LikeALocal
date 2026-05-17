@@ -6,6 +6,8 @@ class MessageModel {
   final String text;
   final Timestamp timestamp;
   final bool isRead;
+  final String type; // 'text' or 'place'
+  final String? placeId;
 
   MessageModel({
     required this.id,
@@ -13,6 +15,8 @@ class MessageModel {
     required this.text,
     required this.timestamp,
     required this.isRead,
+    this.type = 'text',
+    this.placeId,
   });
 
   factory MessageModel.fromDoc(DocumentSnapshot doc) {
@@ -23,6 +27,8 @@ class MessageModel {
       text: data['text'] ?? '',
       timestamp: data['timestamp'] ?? Timestamp.now(),
       isRead: data['isRead'] ?? false,
+      type: data['type'] ?? 'text',
+      placeId: data['placeId'],
     );
   }
 
@@ -31,5 +37,7 @@ class MessageModel {
         'text': text,
         'timestamp': timestamp,
         'isRead': isRead,
+        'type': type,
+        'placeId': placeId,
       };
 }

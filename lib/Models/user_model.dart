@@ -6,6 +6,7 @@ class User {
   final bool isPremium;
   List<String>? favoredPlaces;
   List<String>? addedPlaces;
+  List<String>? friends;
 
   final String? photoUrl;
 
@@ -18,6 +19,7 @@ class User {
     this.photoUrl,
     this.favoredPlaces,
     this.addedPlaces,
+    this.friends,
   });
 
   factory User.fromMap(Map<String, dynamic> map, String uid) {
@@ -30,6 +32,7 @@ class User {
       photoUrl: map['photoUrl'],
       favoredPlaces: List<String>.from(map['favoredPlaces'] ?? []),
       addedPlaces: List<String>.from(map['addedPlaces'] ?? []),
+      friends: List<String>.from(map['friends'] ?? []),
     );
   }
 
@@ -42,6 +45,7 @@ class User {
       'photoUrl': photoUrl,
       'favoredPlaces': favoredPlaces,
       'addedPlaces': addedPlaces,
+      'friends': friends,
     };
   }
 }

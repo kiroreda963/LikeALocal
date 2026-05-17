@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../Providers/PlaceProvider.dart';
 import './edit_profile_page.dart';
 import './favorite_places_page.dart';
 import './saved_places_page.dart';
+import './chat_settings_page.dart';
+import './friends_groups_page.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
@@ -54,6 +58,119 @@ class ProfilePage extends StatelessWidget {
             ),
           ),
 
+          const SizedBox(height: 18),
+
+          StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .doc(user?.uid)
+                .snapshots(),
+            builder: (context, userSnapshot) {
+              return StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collectionGroup('reviews')
+                    .where('userId', isEqualTo: user?.uid)
+                    .snapshots(),
+                builder: (context, reviewsSnapshot) {
+                  if (userSnapshot.connectionState == ConnectionState.waiting ||
+                      reviewsSnapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 18.0),
+                        child: CircularProgressIndicator(),
+                      ),
+                    );
+                  }
+
+                  final userData = userSnapshot.data?.data() as Map<String, dynamic>?;
+                  final addedCount = (userData?['addedPlaces'] as List?)?.length ?? 0;
+                  final favoriteCount = (userData?['favoredPlaces'] as List?)?.length ?? 0;
+                  final reviewCount = reviewsSnapshot.data?.docs.length ?? 0;
+                  
+                  final isSuperUser = addedCount >= 4 && reviewCount >= 5;
+
+                  return Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 8,
+                                horizontal: 14,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isSuperUser
+                                    ? Colors.amber.shade100
+                                    : Colors.blue.shade50,
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    isSuperUser
+                                        ? Icons.verified_rounded
+                                        : Icons.rocket_launch_rounded,
+                                    color: isSuperUser
+                                        ? Colors.amber.shade800
+                                        : Colors.blue.shade800,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    isSuperUser ? 'Super User' : 'Active Explorer',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: isSuperUser
+                                          ? Colors.amber.shade800
+                                          : Colors.blue.shade800,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 18),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            _buildActivityStat('Places added', '$addedCount'),
+                            _buildActivityStat('Reviews', '$reviewCount'),
+                            _buildActivityStat('Favorites', '$favoriteCount'),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          isSuperUser
+                              ? 'You have added $addedCount places and written $reviewCount reviews. Great work!'
+                              : 'Add more places and reviews to unlock the Super User badge.',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.black54,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+
           const SizedBox(height: 30),
 
           Container(
@@ -76,6 +193,13 @@ class ProfilePage extends StatelessWidget {
                   title: "Edit Profile",
                   page: const EditProfilePage(),
                 ),
+                _divider(),
+                _buildTile(
+                  context,
+                  icon: Icons.people_outline,
+                  title: "Friends & Groups",
+                  page: const FriendsGroupsPage(),
+                ),
 
                 _divider(),
 
@@ -93,6 +217,15 @@ class ProfilePage extends StatelessWidget {
                   icon: Icons.bookmark_border,
                   title: "Saved Places",
                   page: const SavedPlacesPage(),
+                ),
+
+                _divider(),
+
+                _buildTile(
+                  context,
+                  icon: Icons.chat_outlined,
+                  title: "Chat & Privacy",
+                  page: const ChatSettingsPage(),
                 ),
               ],
             ),
@@ -118,6 +251,33 @@ class ProfilePage extends StatelessWidget {
 
             icon: const Icon(Icons.logout),
             label: const Text("Logout"),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+
+  Widget _buildActivityStat(String label, String value) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.black54,
+            ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),

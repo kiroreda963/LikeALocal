@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../Models/conversation_model.dart';
 import '../messaging_service.dart';
 import '../widgets/conversation_tile.dart';
+import '../../home/pages/ai_chat_page.dart';
+import '../../notifications/pages/notifications_page.dart';
 import 'chat_screen.dart';
 
 class InboxScreen extends StatelessWidget {
@@ -20,12 +22,13 @@ class InboxScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: Padding(
-          padding: const EdgeInsets.only(left: 14),
-          child: CircleAvatar(
-            backgroundColor: Colors.grey.shade300,
-            child: const Icon(Icons.person, color: Colors.grey),
-          ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black87),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'Chats',
+          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
         ),
         actions: [
           IconButton(
@@ -34,11 +37,14 @@ class InboxScreen extends StatelessWidget {
           ),
           IconButton(
             icon: const Icon(Icons.notifications_none, color: Colors.black87),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Colors.black87),
-            onPressed: () {},
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const NotificationsPage(),
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -48,7 +54,7 @@ class InboxScreen extends StatelessWidget {
           ConversationTile(
             conversation: aiConversation,
             isPinned: true,
-            onTap: () => _openChat(context, aiConversation),
+            onTap: () => _openAiChat(context),
           ),
 
           // ── Section header ─────────────────────────────────────────────
@@ -79,7 +85,9 @@ class InboxScreen extends StatelessWidget {
                 if (snapshot.hasError) {
                   return Center(child: Text('Error: ${snapshot.error}'));
                 }
-                final convs = snapshot.data ?? [];
+                final convs = (snapshot.data ?? [])
+                    .where((c) => !c.isAI)
+                    .toList();
                 if (convs.isEmpty) {
                   return Center(
                     child: Text(
@@ -108,6 +116,13 @@ class InboxScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  void _openAiChat(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AiChatPage()),
     );
   }
 

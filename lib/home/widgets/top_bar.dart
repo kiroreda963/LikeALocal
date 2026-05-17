@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:likealocal/messaging/pages/inbox_screen.dart';
+import '../../notifications/pages/notifications_page.dart';
 
 class TopBar extends StatelessWidget implements PreferredSizeWidget {
   final String userName;
@@ -44,11 +45,14 @@ class TopBar extends StatelessWidget implements PreferredSizeWidget {
         ),
         IconButton(
           icon: const Icon(Icons.notifications_none, color: Colors.black87),
-          onPressed: () {},
-        ),
-        IconButton(
-          icon: const Icon(Icons.settings_outlined, color: Colors.black87),
-          onPressed: () {},
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const NotificationsPage(),
+              ),
+            );
+          },
         ),
         const SizedBox(width: 4),
       ],

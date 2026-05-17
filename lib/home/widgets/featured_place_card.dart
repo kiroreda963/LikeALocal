@@ -22,7 +22,9 @@ class FeaturedPlaceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Material(
+      color: Colors.transparent,
+      child: Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -144,6 +146,7 @@ class FeaturedPlaceCard extends StatelessWidget {
           ),
         ],
       ),
+    ),
     );
   }
 }

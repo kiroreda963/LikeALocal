@@ -7,14 +7,17 @@ import '../Widgets/message_bubble.dart';
 import '../Widgets/message_input_bar.dart';
 
 class ChatScreen extends StatefulWidget {
-  final ConversationModel conversation;
+  final ConversationModel? conversation;
+  final String? conversationId;
   final String currentUserId;
 
   const ChatScreen({
     super.key,
-    required this.conversation,
+    this.conversation,
+    this.conversationId,
     required this.currentUserId,
-  });
+  }) : assert(conversation != null || conversationId != null,
+            'Either conversation or conversationId must be provided');
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -23,12 +26,36 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final ScrollController _scrollController = ScrollController();
   final MessagingService _service = MessagingService();
+  ConversationModel? _conversation;
+  bool _isLoading = false;
 
-  bool get _isAI => widget.conversation.isAI;
+  @override
+  void initState() {
+    super.initState();
+    _conversation = widget.conversation;
+    if (_conversation == null && widget.conversationId != null) {
+      _loadConversation();
+    }
+  }
+
+  Future<void> _loadConversation() async {
+    setState(() => _isLoading = true);
+    final conv = await _service.getConversation(widget.conversationId!, widget.currentUserId);
+    if (mounted) {
+      setState(() {
+        _conversation = conv;
+        _isLoading = false;
+      });
+    }
+  }
+
+  bool get _isAI => _conversation?.isAI ?? false;
 
   Stream<List<MessageModel>> get _messageStream => _isAI
       ? _service.aiMessagesStream(widget.currentUserId)
-      : _service.messagesStream(widget.conversation.id);
+      : _conversation != null
+          ? _service.messagesStream(_conversation!.id)
+          : const Stream.empty();
 
   @override
   void dispose() {
@@ -49,6 +76,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _send(String text) async {
+    if (_conversation == null) return;
     if (_isAI) {
       await _service.sendAiMessage(
         userId: widget.currentUserId,
@@ -57,7 +85,7 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     } else {
       await _service.sendMessage(
-        conversationId: widget.conversation.id,
+        conversationId: _conversation!.id,
         senderId: widget.currentUserId,
         text: text,
       );
@@ -69,25 +97,27 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFEEEEEE),
-      body: Column(
-        children: [
-          // ── Chat App Bar ───────────────────────────────────────────────
-          _ChatAppBar(conversation: widget.conversation),
+      body: _isLoading || _conversation == null
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+              children: [
+                // ── Chat App Bar ───────────────────────────────────────────────
+                _ChatAppBar(conversation: _conversation!),
 
-          // ── Messages ───────────────────────────────────────────────────
-          Expanded(
-            child: StreamBuilder<List<MessageModel>>(
-              stream: _messageStream,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final messages = snapshot.data ?? [];
-                if (messages.isNotEmpty) _scrollToBottom();
+                // ── Messages ───────────────────────────────────────────────────
+                Expanded(
+                  child: StreamBuilder<List<MessageModel>>(
+                    stream: _messageStream,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      final messages = snapshot.data ?? [];
+                      if (messages.isNotEmpty) _scrollToBottom();
 
-                return ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                      return ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                   itemCount: messages.length,
                   itemBuilder: (context, i) {
                     final msg = messages[i];
@@ -102,8 +132,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       timestamp: msg.timestamp,
                       senderAvatar: isMine
                           ? null
-                          : widget.conversation.participantAvatar,
+                          : _conversation?.participantAvatar,
                       showAvatar: showAvatar,
+                      placeId: msg.placeId,
                     );
                   },
                 );
@@ -176,11 +207,6 @@ class _ChatAppBar extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-          // Settings icon
-          IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.settings_outlined, color: Colors.black87),
           ),
         ],
       ),

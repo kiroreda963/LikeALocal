@@ -11,45 +11,9 @@ import '../../../Models/conversation_model.dart';
 import '../../../Models/user_model.dart' as user_model;
 import '../../../services/place_service.dart';
 import '../../messaging/messaging_service.dart';
+import '../../services/chat_settings_service.dart';
 import '../../messaging/pages/chat_screen.dart';
 import '../../../auth/auth_provider.dart' as local_auth;
-
-class MapTopBar extends StatelessWidget implements PreferredSizeWidget {
-  const MapTopBar({super.key});
-
-  @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
-
-  @override
-  Widget build(BuildContext context) {
-    return AppBar(
-      backgroundColor: Colors.white,
-      elevation: 0,
-      leading: const Padding(
-        padding: EdgeInsets.only(left: 12),
-        child: CircleAvatar(
-          backgroundColor: Colors.white,
-          child: Icon(Icons.account_circle_outlined, color: Colors.black87),
-        ),
-      ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.chat_bubble_outline, color: Colors.black87),
-          onPressed: () {},
-        ),
-        IconButton(
-          icon: const Icon(Icons.notifications_none, color: Colors.black87),
-          onPressed: () {},
-        ),
-        IconButton(
-          icon: const Icon(Icons.settings_outlined, color: Colors.black87),
-          onPressed: () {},
-        ),
-        const SizedBox(width: 4),
-      ],
-    );
-  }
-}
 
 class MapPage extends StatefulWidget {
   const MapPage({super.key});
@@ -68,7 +32,10 @@ class _MapPageState extends State<MapPage> {
   LatLng? _myLocation;
   String _query = '';
   String? _selectedCategoryFilter;
+  bool _showFavoritesOnly = false;
+  Set<String> _favoritePlaceIds = {};
   user_model.User? _currentUser;
+  PlacesProvider? _placesProvider;
 
   @override
   void initState() {
@@ -77,11 +44,120 @@ class _MapPageState extends State<MapPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<PlacesProvider>().fetchPlaces();
       _loadCurrentUserInfo();
+      _loadFavoritePlaceIds();
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final provider = context.read<PlacesProvider>();
+    if (_placesProvider != provider) {
+      _placesProvider?.removeListener(_applyMapFocus);
+      _placesProvider = provider;
+      _placesProvider!.addListener(_applyMapFocus);
+    }
+    _applyMapFocus();
+  }
+
+  void _applyMapFocus() {
+    final focus = _placesProvider?.mapFocusPlace;
+    final showReviews = _placesProvider?.mapShowReviewsPlace;
+    
+    if (focus == null && showReviews == null || !mounted) return;
+
+    if (focus != null) {
+      final matches =
+          _placesProvider!.places.where((p) => p.id == focus.id);
+      final place = matches.isNotEmpty ? matches.first : focus;
+      _selectPlace(place);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _placesProvider?.clearMapFocus();
+      });
+    }
+
+    if (showReviews != null) {
+      // Delay slightly to ensure map is ready or bottom sheet can open
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) {
+          _showReviews(showReviews);
+        }
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _placesProvider?.clearShowReviewsPlace();
+      });
+    }
+  }
+
+  Future<void> _loadFavoritePlaceIds() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final ids = await context.read<PlacesProvider>().getFavoritePlaceIds(
+      user.uid,
+    );
+    if (!mounted) return;
+    setState(() => _favoritePlaceIds = ids);
+  }
+
+  void _toggleFavoritesFilter() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in to view your favorites')),
+      );
+      return;
+    }
+
+    if (!_showFavoritesOnly && _favoritePlaceIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No favorites yet — tap the heart on a place to save it'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _showFavoritesOnly = !_showFavoritesOnly;
+      if (_showFavoritesOnly) {
+        _selectedCategoryFilter = null;
+      }
+    });
+
+    final places = context.read<PlacesProvider>().places;
+    final visible = places.where((place) {
+      if (!_favoritePlaceIds.contains(place.id)) return false;
+      final matchesQuery =
+          _query.isEmpty ||
+          place.placeName.toLowerCase().contains(_query.toLowerCase()) ||
+          place.category.toLowerCase().contains(_query.toLowerCase());
+      return matchesQuery;
+    }).toList();
+
+    if (_showFavoritesOnly && visible.isNotEmpty) {
+      _selectPlace(visible.first);
+    } else if (_showFavoritesOnly) {
+      setState(() => _selectedPlace = null);
+    }
+  }
+
+  void _onFavoriteChanged(String placeId, bool isFavorited) {
+    setState(() {
+      if (isFavorited) {
+        _favoritePlaceIds = {..._favoritePlaceIds, placeId};
+      } else {
+        _favoritePlaceIds = _favoritePlaceIds.where((id) => id != placeId).toSet();
+        if (_showFavoritesOnly && _selectedPlace?.id == placeId) {
+          _selectedPlace = null;
+        }
+      }
     });
   }
 
   @override
   void dispose() {
+    _placesProvider?.removeListener(_applyMapFocus);
     _searchController.dispose();
     super.dispose();
   }
@@ -152,6 +228,17 @@ class _MapPageState extends State<MapPage> {
     _mapController.move(LatLng(place.latitude, place.longitude), 15.6);
   }
 
+  void _selectPlaceFromFilterList(Place place) {
+    _searchController.clear();
+    setState(() {
+      _query = '';
+      _selectedCategoryFilter = null;
+      _showFavoritesOnly = false;
+      _selectedPlace = place;
+    });
+    _mapController.move(LatLng(place.latitude, place.longitude), 15.6);
+  }
+
   double _distanceKm(Place place) {
     final origin = _myLocation ?? _newCairo;
     final placeLatLng = LatLng(place.latitude, place.longitude);
@@ -165,182 +252,191 @@ class _MapPageState extends State<MapPage> {
         final places = placesProvider.places;
 
         final filteredPlaces = places.where((place) {
-          final matchesQuery =
-              _query.isEmpty ||
-              place.placeName.toLowerCase().contains(_query.toLowerCase()) ||
-              place.category.toLowerCase().contains(_query.toLowerCase());
-          final matchesCategory =
-              _selectedCategoryFilter == null ||
-              place.category.toLowerCase() ==
-                  _selectedCategoryFilter?.toLowerCase();
-          return matchesQuery && matchesCategory;
-        }).toList();
+        final matchesQuery =
+            _query.isEmpty ||
+            place.placeName.toLowerCase().contains(_query.toLowerCase()) ||
+            place.category.toLowerCase().contains(_query.toLowerCase());
+        final matchesCategory =
+            _selectedCategoryFilter == null ||
+            place.category == _selectedCategoryFilter;
+        final matchesFavorites =
+            !_showFavoritesOnly || _favoritePlaceIds.contains(place.id);
+        return matchesQuery && matchesCategory && matchesFavorites;
+      }).toList();
 
         final selectedPlace = _selectedPlace;
 
         return Scaffold(
-          body: Stack(
-            children: [
-              // Map layer
-              FlutterMap(
-                mapController: _mapController,
-                options: MapOptions(
-                  initialCenter: selectedPlace != null
-                      ? LatLng(selectedPlace.latitude, selectedPlace.longitude)
-                      : _newCairo,
-                  initialZoom: 15.2,
-                  interactionOptions: const InteractionOptions(
-                    flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-                  ),
+        body: Stack(
+          children: [
+            // Map layer
+            FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: selectedPlace != null
+                    ? LatLng(selectedPlace.latitude, selectedPlace.longitude)
+                    : _newCairo,
+                initialZoom: 15.2,
+                interactionOptions: const InteractionOptions(
+                  flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                 ),
-                children: [
-                  TileLayer(
-                    urlTemplate:
-                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.example.likealocal',
-                    tileBuilder: (context, tileWidget, tile) {
-                      return ColorFiltered(
-                        colorFilter: const ColorFilter.matrix([
-                          0.62,
-                          0.12,
-                          0.06,
-                          0,
-                          70,
-                          0.08,
-                          1.08,
-                          0.08,
-                          0,
-                          52,
-                          0.04,
-                          0.12,
-                          0.68,
-                          0,
-                          70,
-                          0,
-                          0,
-                          0,
-                          1,
-                          0,
-                        ]),
-                        child: tileWidget,
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate:
+                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.example.likealocal',
+                  tileBuilder: (context, tileWidget, tile) {
+                    return ColorFiltered(
+                      colorFilter: const ColorFilter.matrix([
+                        0.62,
+                        0.12,
+                        0.06,
+                        0,
+                        70,
+                        0.08,
+                        1.08,
+                        0.08,
+                        0,
+                        52,
+                        0.04,
+                        0.12,
+                        0.68,
+                        0,
+                        70,
+                        0,
+                        0,
+                        0,
+                        1,
+                        0,
+                      ]),
+                      child: tileWidget,
+                    );
+                  },
+                ),
+                MarkerLayer(
+                  markers: [
+                    if (_myLocation != null)
+                      Marker(
+                        point: _myLocation!,
+                        width: 24,
+                        height: 24,
+                        child: const _CurrentLocationMarker(),
+                      ),
+                    ...filteredPlaces.map((place) {
+                      final placeLatLng = LatLng(
+                        place.latitude,
+                        place.longitude,
                       );
+                      return Marker(
+                        point: placeLatLng,
+                        width: 155,
+                        height: 56,
+                        alignment: Alignment.centerLeft,
+                        child: _PlaceMarkerFirebase(
+                          place: place,
+                          selected: place.id == selectedPlace?.id,
+                          isFavorite: _favoritePlaceIds.contains(place.id),
+                          onTap: () => _selectPlace(place),
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ],
+            ),
+
+            // Top UI Controls
+            SafeArea(
+              bottom: false,
+              child: Column(
+                children: [
+                  const SizedBox(height: 8),
+                  _MapSearchBar(
+                    controller: _searchController,
+                    onChanged: (value) => setState(() => _query = value),
+                    onClear: () {
+                      _searchController.clear();
+                      setState(() => _query = '');
                     },
                   ),
-                  MarkerLayer(
-                    markers: [
-                      if (_myLocation != null)
-                        Marker(
-                          point: _myLocation!,
-                          width: 24,
-                          height: 24,
-                          child: const _CurrentLocationMarker(),
-                        ),
-                      ...filteredPlaces.map((place) {
-                        final placeLatLng = LatLng(
-                          place.latitude,
-                          place.longitude,
-                        );
-                        return Marker(
-                          point: placeLatLng,
-                          width: 155,
-                          height: 56,
-                          alignment: Alignment.centerLeft,
-                          child: _PlaceMarkerFirebase(
-                            place: place,
-                            selected: place.id == selectedPlace?.id,
-                            onTap: () => _selectPlace(place),
-                          ),
-                        );
-                      }),
-                    ],
+                  const SizedBox(height: 12),
+                  _MapFiltersRow(
+                    favoritesActive: _showFavoritesOnly,
+                    favoriteCount: _favoritePlaceIds.length,
+                    onFavoritesTap: _toggleFavoritesFilter,
+                    selectedCategory: _selectedCategoryFilter,
+                    onCategorySelected: (category) {
+                      setState(() {
+                        _showFavoritesOnly = false;
+                        _selectedCategoryFilter =
+                            _selectedCategoryFilter == category ? null : category;
+                        final visible = filteredPlaces;
+                        if (visible.isNotEmpty) {
+                          _selectPlace(visible.first);
+                        } else {
+                          _selectedPlace = null;
+                        }
+                      });
+                    },
                   ),
+                  // Search Results or Category Results
+                  if (_query.isNotEmpty ||
+                      _selectedCategoryFilter != null ||
+                      _showFavoritesOnly)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: _SearchResultsFirebase(
+                        places: filteredPlaces,
+                        onTap: _selectPlaceFromFilterList,
+                        filterType: _showFavoritesOnly
+                            ? 'My Favorites'
+                            : (_selectedCategoryFilter ?? _query),
+                      ),
+                    ),
                 ],
               ),
+            ),
 
-              // Top UI Controls
-              SafeArea(
-                bottom: false,
-                child: Column(
-                  children: [
-                    const SizedBox(height: 12),
-                    // Search Bar
-                    _MapSearchBar(
-                      controller: _searchController,
-                      onChanged: (value) => setState(() => _query = value),
-                      onClear: () {
-                        _searchController.clear();
-                        setState(() => _query = '');
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    // Category Filters
-                    _CategoryFiltersFirebase(
-                      selected: _selectedCategoryFilter,
-                      onSelected: (category) {
-                        setState(() {
-                          _selectedCategoryFilter =
-                              _selectedCategoryFilter == category
-                              ? null
-                              : category;
-                          final visible = filteredPlaces;
-                          if (visible.isNotEmpty) {
-                            _selectPlace(visible.first);
-                          }
-                        });
-                      },
-                    ),
-                    // Search Results
-                    if (_query.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: _SearchResultsFirebase(
-                          places: filteredPlaces,
-                          onTap: _selectPlace,
-                        ),
+            // Bottom Controls
+            SafeArea(
+              top: false,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 24, bottom: 12),
+                      child: _MapControlButton(
+                        icon: Icons.my_location,
+                        onPressed: () {
+                          final target = _myLocation ?? _newCairo;
+                          _mapController.move(target, 15.5);
+                        },
                       ),
-                  ],
-                ),
+                    ),
+                  ),
+                  if (selectedPlace != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                      child: _SelectedPlaceSheetFirebase(
+                        place: selectedPlace,
+                        distanceKm: _distanceKm(selectedPlace),
+                        onReviews: () => _showReviews(selectedPlace),
+                        onChat: () => _showChatDialog(selectedPlace),
+                        onFavoriteChanged: _onFavoriteChanged,
+                      ),
+                    ),
+                ],
               ),
-
-              // Bottom Controls
-              SafeArea(
-                top: false,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 24, bottom: 12),
-                        child: _MapControlButton(
-                          icon: Icons.my_location,
-                          onPressed: () {
-                            final target = _myLocation ?? _newCairo;
-                            _mapController.move(target, 15.5);
-                          },
-                        ),
-                      ),
-                    ),
-                    if (selectedPlace != null)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                        child: _SelectedPlaceSheetFirebase(
-                          place: selectedPlace,
-                          distanceKm: _distanceKm(selectedPlace),
-                          onReviews: () => _showReviews(selectedPlace),
-                          onChat: () => _showChatDialog(selectedPlace),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
   void _showReviews(Place place) async {
     final reviews = await context.read<PlacesProvider>().fetchReviews(place.id);
     if (!mounted) return;
@@ -800,9 +896,15 @@ class _MapPageState extends State<MapPage> {
       );
     }
 
-    if (place.authorId.isEmpty || place.authorId == currentUser.uid) {
+    if (place.authorId == currentUser.uid) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to open chat with this user')),
+        const SnackBar(content: Text("You can't chat with yourself")),
+      );
+      return;
+    }
+    if (place.authorId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to open chat for this place')),
       );
       return;
     }
@@ -814,6 +916,7 @@ class _MapPageState extends State<MapPage> {
       builder: (context) {
         return AlertDialog(
           title: Text('Message about ${place.placeName}'),
+          backgroundColor: Colors.white,
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -860,10 +963,13 @@ class _MapPageState extends State<MapPage> {
               TextField(
                 controller: messageController,
                 maxLines: 4,
+
+
                 decoration: InputDecoration(
                   hintText: 'Ask about this place...',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
                   ),
                 ),
               ),
@@ -872,7 +978,10 @@ class _MapPageState extends State<MapPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Color.fromARGB(255, 0, 0, 0)),
+              ),
             ),
             ElevatedButton(
               onPressed: () async {
@@ -888,9 +997,12 @@ class _MapPageState extends State<MapPage> {
                 await _openChatWithAuthor(place, messageText);
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF143C23),
+                backgroundColor: const Color.fromARGB(255, 255, 255, 255),
               ),
-              child: const Text('Send'),
+              child: const Text(
+                'Send',
+                style: TextStyle(color: Color.fromARGB(255, 0, 0, 0)),
+              ),
             ),
           ],
         );
@@ -927,11 +1039,28 @@ class _MapPageState extends State<MapPage> {
     if (currentUser == null) return;
 
     final authorId = place.authorId;
-    if (authorId.isEmpty || authorId == currentUser.uid) return;
+    if (authorId == currentUser.uid) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("You can't chat with yourself")),
+      );
+      return;
+    }
+    if (authorId.isEmpty) return;
 
     final authorMeta = await _fetchUserMeta(authorId);
     final otherUserName = authorMeta['name'] ?? 'User';
     final otherUserAvatar = authorMeta['avatar'] ?? '';
+
+    final blockReason =
+        await ChatSettingsService().getMessagingBlockReason(authorId);
+    if (blockReason != null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(blockReason)),
+      );
+      return;
+    }
 
     final service = MessagingService();
     final conversationId = await service.createOrGetConversation(
@@ -1039,42 +1168,54 @@ class _MapSearchBar extends StatelessWidget {
     );
   }
 }
+class _MapFiltersRow extends StatelessWidget {
+  final bool favoritesActive;
+  final int favoriteCount;
+  final VoidCallback onFavoritesTap;
+  final String? selectedCategory;
+  final ValueChanged<String> onCategorySelected;
 
-class _CategoryFiltersFirebase extends StatelessWidget {
-  final String? selected;
-  final ValueChanged<String> onSelected;
-
-  const _CategoryFiltersFirebase({
-    required this.selected,
-    required this.onSelected,
+  const _MapFiltersRow({
+    required this.favoritesActive,
+    required this.favoriteCount,
+    required this.onFavoritesTap,
+    required this.selectedCategory,
+    required this.onCategorySelected,
   });
 
   @override
   Widget build(BuildContext context) {
-    final categories = ['Food', 'Gym', 'Tourist', 'Hidden Gems'];
+    final categories = [
+      'Historical Places',
+      'Restaurants & Cafes',
+      'Shopping',
+      'Entertainment',
+      'Nightlife',
+      'Beaches & Resorts',
+    ];
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
-        children: List.generate(categories.length, (index) {
-          final category = categories[index];
-          final active = selected == category;
-          return Padding(
+        children: [
+          Padding(
             padding: const EdgeInsets.only(right: 8),
             child: GestureDetector(
-              onTap: () => onSelected(category),
+              onTap: onFavoritesTap,
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 height: 34,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: active ? const Color(0xFF143C23) : Colors.white,
+                  color: favoritesActive
+                      ? const Color(0xFFE91E63)
+                      : Colors.white,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: active
-                        ? const Color(0xFF143C23)
+                    color: favoritesActive
+                        ? const Color(0xFFE91E63)
                         : Colors.grey.shade300,
                     width: 1.5,
                   ),
@@ -1086,18 +1227,75 @@ class _CategoryFiltersFirebase extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: Text(
-                  category.toUpperCase(),
-                  style: TextStyle(
-                    color: active ? Colors.white : Colors.black87,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      favoritesActive ? Icons.favorite : Icons.favorite_border,
+                      size: 16,
+                      color: favoritesActive
+                          ? Colors.white
+                          : const Color(0xFFE91E63),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      favoriteCount > 0
+                          ? 'Favorites ($favoriteCount)'
+                          : 'Favorites',
+                      style: TextStyle(
+                        color: favoritesActive ? Colors.white : Colors.black87,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-          );
-        }),
+          ),
+          ...List.generate(categories.length, (index) {
+            final category = categories[index];
+            final active = selectedCategory == category;
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: GestureDetector(
+                onTap: () => onCategorySelected(category),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  height: 34,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: active ? const Color(0xFF143C23) : Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: active
+                          ? const Color(0xFF143C23)
+                          : Colors.grey.shade300,
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    category,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: active ? Colors.white : Colors.black87,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+        ],
       ),
     );
   }
@@ -1106,17 +1304,36 @@ class _CategoryFiltersFirebase extends StatelessWidget {
 class _SearchResultsFirebase extends StatelessWidget {
   final List<Place> places;
   final ValueChanged<Place> onTap;
+  final String? filterType;
 
-  const _SearchResultsFirebase({required this.places, required this.onTap});
+  const _SearchResultsFirebase({
+    required this.places,
+    required this.onTap,
+    this.filterType,
+  });
 
   @override
   Widget build(BuildContext context) {
+    // Determine header text
+    String headerText = 'Search Results';
+    if (filterType == 'My Favorites') {
+      headerText = filterType!;
+    } else if (filterType != null &&
+        (filterType!.contains('Historical') ||
+            filterType!.contains('Restaurant') ||
+            filterType!.contains('Shopping') ||
+            filterType!.contains('Entertainment') ||
+            filterType!.contains('Nightlife') ||
+            filterType!.contains('Beaches'))) {
+      headerText = filterType!;
+    }
+
     return Center(
       child: Container(
         width: 280,
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 12),
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.35,
+          maxHeight: MediaQuery.of(context).size.height * 0.5,
         ),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -1129,80 +1346,103 @@ class _SearchResultsFirebase extends StatelessWidget {
             ),
           ],
         ),
-        child: places.isEmpty
-            ? const Padding(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header with category name
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(
+                headerText,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black87,
+                ),
+              ),
+            ),
+            const Divider(height: 8),
+            if (places.isEmpty)
+              const Padding(
                 padding: EdgeInsets.all(16),
                 child: Text(
                   'No places found',
                   style: TextStyle(color: Colors.black54, fontSize: 14),
                 ),
               )
-            : ListView.builder(
-                padding: EdgeInsets.zero,
-                itemCount: places.length,
-                itemBuilder: (context, index) {
-                  final place = places[index];
-                  return ListTile(
-                    dense: false,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 4,
-                    ),
-                    leading: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF143C23).withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
+            else
+              Expanded(
+                child: ListView.builder(
+                  padding: EdgeInsets.zero,
+                  itemCount: places.length,
+                  itemBuilder: (context, index) {
+                    final place = places[index];
+                    return ListTile(
+                      dense: false,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
                       ),
-                      child: Icon(
-                        PlaceService.getIconByName(place.placeName),
-                        color: const Color(0xFF143C23),
-                        size: 18,
+                      leading: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF143C23)
+                              .withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          PlaceService.getIconByName(place.placeName),
+                          color: const Color(0xFF143C23),
+                          size: 18,
+                        ),
                       ),
-                    ),
-                    title: Text(
-                      place.placeName,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
+                      title: Text(
+                        place.placeName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
                       ),
-                    ),
-                    subtitle: Text(
-                      place.category,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Colors.black54,
+                      subtitle: Text(
+                        place.category,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.black54,
+                        ),
                       ),
-                    ),
-                    trailing: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE7FF00),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.star, color: Colors.black, size: 12),
-                          const SizedBox(width: 2),
-                          Text(
-                            place.rating.toStringAsFixed(1),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 11,
+                      trailing: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE7FF00),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.star,
+                                color: Colors.black, size: 12),
+                            const SizedBox(width: 2),
+                            Text(
+                              place.rating.toStringAsFixed(1),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 11,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    onTap: () => onTap(place),
-                  );
-                },
+                      onTap: () => onTap(place),
+                    );
+                  },
+                ),
               ),
+          ],
+        ),
       ),
     );
   }
@@ -1211,11 +1451,13 @@ class _SearchResultsFirebase extends StatelessWidget {
 class _PlaceMarkerFirebase extends StatelessWidget {
   final Place place;
   final bool selected;
+  final bool isFavorite;
   final VoidCallback onTap;
 
   const _PlaceMarkerFirebase({
     required this.place,
     required this.selected,
+    this.isFavorite = false,
     required this.onTap,
   });
 
@@ -1232,9 +1474,12 @@ class _PlaceMarkerFirebase extends StatelessWidget {
             width: selected ? 46 : 42,
             height: selected ? 46 : 42,
             decoration: BoxDecoration(
-              color: const Color(0xFF143C23),
+              color: isFavorite ? const Color(0xFFE91E63) : const Color(0xFF143C23),
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
+              border: Border.all(
+                color: isFavorite ? const Color(0xFFFFCDD2) : Colors.white,
+                width: 2,
+              ),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.18),
@@ -1243,12 +1488,17 @@ class _PlaceMarkerFirebase extends StatelessWidget {
                 ),
               ],
             ),
-            child: Icon(icon, color: Colors.white, size: 24),
+            child: Icon(
+              isFavorite ? Icons.favorite : icon,
+              color: Colors.white,
+              size: isFavorite ? 20 : 24,
+            ),
           ),
           if (selected)
             Transform.translate(
               offset: const Offset(-3, 0),
               child: Container(
+                constraints: const BoxConstraints(maxWidth: 100),
                 height: 27,
                 padding: const EdgeInsets.only(left: 12, right: 8),
                 decoration: BoxDecoration(
@@ -1262,6 +1512,7 @@ class _PlaceMarkerFirebase extends StatelessWidget {
                       child: Text(
                         place.placeName,
                         overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                         style: const TextStyle(
                           color: Color(0xFF219357),
                           fontSize: 10,
@@ -1280,6 +1531,7 @@ class _PlaceMarkerFirebase extends StatelessWidget {
                         borderRadius: BorderRadius.circular(7),
                       ),
                       child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
                             place.rating.toStringAsFixed(1),
@@ -1302,18 +1554,19 @@ class _PlaceMarkerFirebase extends StatelessWidget {
     );
   }
 }
-
 class _SelectedPlaceSheetFirebase extends StatefulWidget {
   final Place place;
   final double distanceKm;
   final VoidCallback onReviews;
   final VoidCallback onChat;
+  final void Function(String placeId, bool isFavorited)? onFavoriteChanged;
 
   const _SelectedPlaceSheetFirebase({
     required this.place,
     required this.distanceKm,
     required this.onReviews,
     required this.onChat,
+    this.onFavoriteChanged,
   });
 
   @override
@@ -1362,6 +1615,7 @@ class _SelectedPlaceSheetFirebaseState
           currentUser.uid,
           widget.place.id,
         );
+        widget.onFavoriteChanged?.call(widget.place.id, false);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -1375,6 +1629,7 @@ class _SelectedPlaceSheetFirebaseState
           currentUser.uid,
           widget.place.id,
         );
+        widget.onFavoriteChanged?.call(widget.place.id, true);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -1396,6 +1651,160 @@ class _SelectedPlaceSheetFirebaseState
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  void _showShareDialog(BuildContext context, Place place) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return StreamBuilder<DocumentSnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .doc(currentUser.uid)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+            final userData = snapshot.data!.data() as Map<String, dynamic>?;
+            final friends = List<String>.from(userData?['friends'] ?? []);
+
+            return Container(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Share Place with', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  const SizedBox(height: 12),
+                  const Text('Friends', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                  if (friends.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Text('No friends to share with.'),
+                    )
+                  else
+                    SizedBox(
+                      height: 150,
+                      child: ListView.builder(
+                        itemCount: friends.length,
+                        itemBuilder: (context, index) {
+                          return FutureBuilder<DocumentSnapshot>(
+                            future: FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(friends[index])
+                                .get(),
+                            builder: (context, userSnap) {
+                              if (!userSnap.hasData) return const SizedBox();
+                              final data = userSnap.data!.data() as Map<String, dynamic>?;
+                              final name = data?['name'] ?? 'User';
+
+                              return ListTile(
+                                title: Text(name),
+                                trailing: const Icon(Icons.send, color: Color(0xFF143C23)),
+                                onTap: () async {
+                                  Navigator.pop(context);
+                                  await _sharePlaceToUser(friends[index], place);
+                                },
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  const Divider(),
+                  const Text('Groups', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('conversations')
+                        .where('participants', arrayContains: currentUser.uid)
+                        .where('isGroup', isEqualTo: true)
+                        .snapshots(),
+                    builder: (context, groupSnap) {
+                      if (!groupSnap.hasData) return const SizedBox();
+                      final groups = groupSnap.data!.docs;
+                      if (groups.isEmpty) {
+                        return const Padding(
+                          padding: EdgeInsets.all(8.0),
+                          child: Text('No groups.'),
+                        );
+                      }
+                      
+                      return SizedBox(
+                        height: 150,
+                        child: ListView.builder(
+                          itemCount: groups.length,
+                          itemBuilder: (context, index) {
+                            final data = groups[index].data() as Map<String, dynamic>;
+                            final name = data['participantName'] ?? 'Group';
+                            return ListTile(
+                              title: Text(name),
+                              trailing: const Icon(Icons.send, color: Color(0xFF143C23)),
+                              onTap: () async {
+                                Navigator.pop(context);
+                                await _sharePlaceToGroup(groups[index].id, place);
+                              },
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _sharePlaceToUser(String targetUserId, Place place) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    final sortedIds = [currentUser.uid, targetUserId]..sort();
+    final conversationId = 'chat_${sortedIds.join('_')}';
+
+    await _sendMessage(conversationId, place.id);
+  }
+
+  Future<void> _sharePlaceToGroup(String groupId, Place place) async {
+    await _sendMessage(groupId, place.id);
+  }
+
+  Future<void> _sendMessage(String conversationId, String placeId) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    await FirebaseFirestore.instance
+        .collection('conversations')
+        .doc(conversationId)
+        .collection('messages')
+        .add({
+      'senderId': currentUser.uid,
+      'text': 'Shared a place',
+      'timestamp': Timestamp.now(),
+      'isRead': false,
+      'type': 'place',
+      'placeId': placeId,
+    });
+
+    await FirebaseFirestore.instance
+        .collection('conversations')
+        .doc(conversationId)
+        .update({
+      'lastMessage': 'Shared a place',
+      'lastMessageTime': Timestamp.now(),
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Place shared!')),
+    );
   }
 
   @override
@@ -1522,6 +1931,15 @@ class _SelectedPlaceSheetFirebaseState
                                   ),
                                 );
                               },
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    // Share Button
+                    Expanded(
+                      child: _ActionButton(
+                        icon: Icons.share_outlined,
+                        label: 'Share',
+                        onTap: () => _showShareDialog(context, widget.place),
                       ),
                     ),
                     const SizedBox(width: 6),
