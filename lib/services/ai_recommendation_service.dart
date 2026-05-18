@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
@@ -116,8 +117,8 @@ class UserPlaceContext {
 class AiRecommendationService {
   static const _apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
   static const _model = 'openrouter/free';
-  static const _apiKey =
-      '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';
+
+  String get _apiKey => dotenv.env['AI_API_KEY']?.trim() ?? '';
 
   Future<String> recommend({
     required String userMessage,
@@ -157,6 +158,10 @@ and end with one follow-up question.
 ''';
 
     try {
+      if (_apiKey.isEmpty) {
+        return _fallbackRecommendation(userMessage, profile, placeContext);
+      }
+
       final response = await http
           .post(
             Uri.parse(_apiUrl),
