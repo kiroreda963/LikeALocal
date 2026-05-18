@@ -1199,6 +1199,7 @@ class _MapFiltersRow extends StatelessWidget {
       'Entertainment',
       'Nightlife',
       'Beaches & Resorts',
+      'Hotels',
     ];
 
     return SingleChildScrollView(
