@@ -1077,7 +1077,6 @@ class _MapPageState extends State<MapPage> {
       otherUserName: otherUserName,
       currentUserAvatar: currentUser.photoUrl ?? '',
       otherUserAvatar: otherUserAvatar,
-      otherUserOnline: true,
     );
 
     if (initialMessage.isNotEmpty) {
@@ -1982,12 +1981,12 @@ class _SelectedPlaceSheetFirebaseState
                         final url = Uri.parse(
                           'https://www.google.com/maps/dir/?api=1&destination=${widget.place.latitude},${widget.place.longitude}',
                         );
-                        if (await canLaunchUrl(url)) {
+                        try {
                           await launchUrl(
                             url,
                             mode: LaunchMode.externalApplication,
                           );
-                        } else {
+                        } catch (e) {
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(

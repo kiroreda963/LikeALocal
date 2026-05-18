@@ -4,8 +4,6 @@ class AvatarWidget extends StatelessWidget {
   final String? imageUrl;
   final String name;
   final double size;
-  final bool showOnlineIndicator;
-  final bool isOnline;
   final bool isAI;
 
   const AvatarWidget({
@@ -13,8 +11,6 @@ class AvatarWidget extends StatelessWidget {
     this.imageUrl,
     required this.name,
     this.size = 48,
-    this.showOnlineIndicator = false,
-    this.isOnline = false,
     this.isAI = false,
   });
 
@@ -32,20 +28,6 @@ class AvatarWidget extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           child: _buildAvatar(),
         ),
-        if (showOnlineIndicator)
-          Positioned(
-            right: 1,
-            bottom: 1,
-            child: Container(
-              width: size * 0.25,
-              height: size * 0.25,
-              decoration: BoxDecoration(
-                color: isOnline ? const Color(0xFF4CAF50) : Colors.grey,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 1.5),
-              ),
-            ),
-          ),
       ],
     );
   }
@@ -59,7 +41,11 @@ class AvatarWidget extends StatelessWidget {
       );
     }
     if (isAI) {
-      return const Icon(Icons.smart_toy_outlined, color: Colors.white, size: 24);
+      return const Icon(
+        Icons.smart_toy_outlined,
+        color: Colors.white,
+        size: 24,
+      );
     }
     return _fallbackIcon();
   }

@@ -143,17 +143,17 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                 premiumFeature(Icons.place, 'Unlimited hidden gem uploads'),
                 premiumFeature(
                   Icons.travel_explore,
-                  'AI travel recommendations',
+                  'Unlimited AI travel recommendations',
                 ),
-                premiumFeature(Icons.map, 'Advanced interactive maps'),
                 premiumFeature(
                   Icons.bookmark,
                   'Save unlimited favorite places',
                 ),
+                premiumFeature(Icons.share, 'Share places with friends'),
                 premiumFeature(Icons.star, 'Access exclusive local spots'),
                 premiumFeature(
-                  Icons.notifications_active,
-                  'Priority travel alerts',
+                  Icons.group,
+                  'Create chatting groups with other travelers',
                 ),
                 const SizedBox(height: 40),
                 Container(

@@ -29,7 +29,10 @@ class MessagingService {
   }
 
   /// Get a single conversation by ID.
-  Future<ConversationModel?> getConversation(String conversationId, String currentUserId) async {
+  Future<ConversationModel?> getConversation(
+    String conversationId,
+    String currentUserId,
+  ) async {
     final doc = await _conversations.doc(conversationId).get();
     if (doc.exists) {
       return ConversationModel.fromDoc(doc, currentUserId);
@@ -41,10 +44,17 @@ class MessagingService {
 
   /// Real-time stream of messages in a conversation.
   Stream<List<MessageModel>> messagesStream(String conversationId) {
-    return _messages(conversationId)
-        .orderBy('timestamp', descending: false)
-        .snapshots()
-        .map((snap) => snap.docs.map((d) => MessageModel.fromDoc(d)).toList());
+    return _messages(
+      conversationId,
+    ).orderBy('timestamp', descending: false).snapshots().map((snap) {
+      final messages = snap.docs.map((d) => MessageModel.fromDoc(d)).toList();
+      messages.sort(
+        (a, b) => a.timestamp.toDate().millisecondsSinceEpoch.compareTo(
+          b.timestamp.toDate().millisecondsSinceEpoch,
+        ),
+      );
+      return messages;
+    });
   }
 
   /// Send a message and update the conversation's lastMessage metadata.
@@ -85,7 +95,6 @@ class MessagingService {
     required String otherUserName,
     String currentUserAvatar = '',
     String otherUserAvatar = '',
-    bool otherUserOnline = true,
   }) async {
     final sortedIds = [currentUserId, otherUserId]..sort();
     final conversationId = 'chat_${sortedIds.join('_')}';
@@ -98,18 +107,9 @@ class MessagingService {
       'participantId': otherUserId,
       'participantName': otherUserName,
       'participantAvatar': otherUserAvatar,
-      'isOnline': otherUserOnline,
       'userMeta': {
-        currentUserId: {
-          'name': currentUserName,
-          'avatar': currentUserAvatar,
-          'isOnline': false,
-        },
-        otherUserId: {
-          'name': otherUserName,
-          'avatar': otherUserAvatar,
-          'isOnline': otherUserOnline,
-        },
+        currentUserId: {'name': currentUserName, 'avatar': currentUserAvatar},
+        otherUserId: {'name': otherUserName, 'avatar': otherUserAvatar},
       },
       'lastMessage': '',
       'lastMessageTime': now,
@@ -129,10 +129,17 @@ class MessagingService {
 
   Stream<List<MessageModel>> aiMessagesStream(String userId) {
     final convId = 'ai_$userId';
-    return _messages(convId)
-        .orderBy('timestamp', descending: false)
-        .snapshots()
-        .map((snap) => snap.docs.map((d) => MessageModel.fromDoc(d)).toList());
+    return _messages(
+      convId,
+    ).orderBy('timestamp', descending: false).snapshots().map((snap) {
+      final messages = snap.docs.map((d) => MessageModel.fromDoc(d)).toList();
+      messages.sort(
+        (a, b) => a.timestamp.toDate().millisecondsSinceEpoch.compareTo(
+          b.timestamp.toDate().millisecondsSinceEpoch,
+        ),
+      );
+      return messages;
+    });
   }
 
   Future<void> sendAiMessage({
@@ -155,7 +162,6 @@ class MessagingService {
       'participantAvatar': '',
       'lastMessage': text,
       'lastMessageTime': now,
-      'isOnline': true,
       'isAI': true,
       'participants': [userId, 'ai'],
     }, SetOptions(merge: true));

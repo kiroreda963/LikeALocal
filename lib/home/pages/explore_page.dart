@@ -101,7 +101,6 @@ class _ExplorePageState extends State<ExplorePage> {
       otherUserName: authorMeta['name'] ?? 'User',
       currentUserAvatar: currentUser.photoUrl ?? '',
       otherUserAvatar: authorMeta['avatar'] ?? '',
-      otherUserOnline: true,
     );
 
     final convDoc = await FirebaseFirestore.instance
@@ -135,11 +134,20 @@ class _ExplorePageState extends State<ExplorePage> {
   Widget build(BuildContext context) {
     final provider = context.watch<PlacesProvider>();
     final categories = [
-      'Top Rated',
-      'Trending Now',
-      'Feeling Hungry',
-      'Looking for a Breeze',
-      'Up Late?',
+      'Historical Places',
+      'Restaurants & Cafes',
+      'Shopping',
+      'Nightlife',
+      'Beaches & Resorts',
+      'Hotels',
+    ];
+
+    final priceRanges = const [
+      {'label': 'All', 'value': 'All'},
+      {'label': 'Under \$15', 'value': '<15'},
+      {'label': '\$15 – \$40', 'value': '15-40'},
+      {'label': '\$40 – \$100', 'value': '40-100'},
+      {'label': 'Over \$100', 'value': '100+'},
     ];
 
     return Scaffold(
@@ -183,14 +191,14 @@ class _ExplorePageState extends State<ExplorePage> {
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
-                      children: ['All', r'$', r'$$', r'$$$', r'$$$$'].map((
-                        price,
-                      ) {
-                        final isSelected = provider.selectedPrice == price;
+                      children: priceRanges.map((priceRange) {
+                        final label = priceRange['label']!;
+                        final value = priceRange['value']!;
+                        final isSelected = provider.selectedPrice == value;
                         return Padding(
                           padding: const EdgeInsets.only(right: 10.0),
                           child: ChoiceChip(
-                            label: Text(price),
+                            label: Text(label),
                             selected: isSelected,
                             selectedColor: Colors.black,
                             backgroundColor: Colors.grey.shade100,
@@ -204,7 +212,7 @@ class _ExplorePageState extends State<ExplorePage> {
                                   : Colors.grey.shade300,
                             ),
                             onSelected: (selected) {
-                              provider.setPriceRange(selected ? price : 'All');
+                              provider.setPriceRange(selected ? value : 'All');
                             },
                           ),
                         );

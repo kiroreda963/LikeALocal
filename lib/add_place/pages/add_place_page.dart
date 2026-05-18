@@ -132,7 +132,10 @@ class _AddPlacePageState extends State<AddPlacePage> {
       return;
     }
 
-    final userDoc = await FirebaseFirestore.instance.collection('users').doc(currentUser.uid).get();
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUser.uid)
+        .get();
     final isPremium = userDoc.data()?['isPremium'] ?? false;
     final addedPlaces = List<String>.from(userDoc.data()?['addedPlaces'] ?? []);
 
@@ -142,7 +145,9 @@ class _AddPlacePageState extends State<AddPlacePage> {
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('Upgrade to Pro'),
-            content: const Text('Free users can only add up to 3 places. Upgrade to Pro to add unlimited places!'),
+            content: const Text(
+              'Free users can only add up to 3 places. Upgrade to Pro to add unlimited places!',
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
@@ -357,6 +362,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
                       value: 'Beaches & Resorts',
                       child: Text('Beaches & Resorts'),
                     ),
+                    DropdownMenuItem(value: 'Hotels', child: Text('Hotels')),
                   ],
                   onChanged: (value) {
                     setState(() {
@@ -452,7 +458,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
                 const SizedBox(height: 25),
 
                 const Text(
-                  'Image URL (Optional)',
+                  'Image URL',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 10),

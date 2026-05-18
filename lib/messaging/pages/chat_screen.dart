@@ -234,8 +234,6 @@ class _ChatAppBar extends StatelessWidget {
             imageUrl: conversation.participantAvatar,
             name: conversation.participantName,
             size: 42,
-            showOnlineIndicator: true,
-            isOnline: conversation.isOnline,
             isAI: conversation.isAI,
           ),
           const SizedBox(width: 10),
@@ -250,15 +248,6 @@ class _ChatAppBar extends StatelessWidget {
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: Colors.black,
-                  ),
-                ),
-                Text(
-                  conversation.isOnline ? 'online' : 'offline',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: conversation.isOnline
-                        ? const Color(0xFF4CAF50)
-                        : Colors.grey,
                   ),
                 ),
               ],

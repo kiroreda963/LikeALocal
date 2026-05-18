@@ -7,7 +7,6 @@ class ConversationModel {
   final String participantAvatar; // URL or asset path
   final String lastMessage;
   final Timestamp lastMessageTime;
-  final bool isOnline;
   final bool isAI;
   final bool isGroup;
   final List<String> participants;
@@ -19,7 +18,6 @@ class ConversationModel {
     required this.participantAvatar,
     required this.lastMessage,
     required this.lastMessageTime,
-    required this.isOnline,
     this.isAI = false,
     this.isGroup = false,
     this.participants = const [],
@@ -53,7 +51,6 @@ class ConversationModel {
         lastMessage: data['lastMessage'] as String? ?? '',
         lastMessageTime:
             data['lastMessageTime'] as Timestamp? ?? Timestamp.now(),
-        isOnline: data['isOnline'] as bool? ?? true,
         isAI: true,
         participants: List<String>.from((data['participants'] as List?) ?? []),
       );
@@ -69,7 +66,6 @@ class ConversationModel {
         lastMessage: data['lastMessage'] as String? ?? '',
         lastMessageTime:
             data['lastMessageTime'] as Timestamp? ?? Timestamp.now(),
-        isOnline: false,
         isAI: false,
         isGroup: true,
         participants: List<String>.from((data['participants'] as List?) ?? []),
@@ -106,10 +102,6 @@ class ConversationModel {
         otherMeta?['avatar'] as String? ??
         (topLevelIsOther ? data['participantAvatar'] as String? ?? '' : '');
 
-    final isOnline =
-        otherMeta?['isOnline'] as bool? ??
-        (topLevelIsOther ? data['isOnline'] as bool? ?? false : false);
-
     return ConversationModel(
       id: docId,
       participantId: otherId,
@@ -117,7 +109,6 @@ class ConversationModel {
       participantAvatar: participantAvatar,
       lastMessage: data['lastMessage'] as String? ?? '',
       lastMessageTime: data['lastMessageTime'] as Timestamp? ?? Timestamp.now(),
-      isOnline: isOnline,
       isAI: false,
       participants: participants,
     );
@@ -133,6 +124,5 @@ final ConversationModel aiConversation = ConversationModel(
   lastMessage:
       'Hi! I can suggest spots based on your favorite places and places you added. What are you in the mood for?',
   lastMessageTime: Timestamp.now(),
-  isOnline: true,
   isAI: true,
 );
