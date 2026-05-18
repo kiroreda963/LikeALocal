@@ -48,11 +48,12 @@ class MessagingService {
       conversationId,
     ).orderBy('timestamp', descending: false).snapshots().map((snap) {
       final messages = snap.docs.map((d) => MessageModel.fromDoc(d)).toList();
-      messages.sort(
-        (a, b) => a.timestamp.toDate().millisecondsSinceEpoch.compareTo(
-          b.timestamp.toDate().millisecondsSinceEpoch,
-        ),
-      );
+      messages.sort((a, b) {
+        final aTs = a.timestamp.toDate().millisecondsSinceEpoch;
+        final bTs = b.timestamp.toDate().millisecondsSinceEpoch;
+        final cmp = aTs.compareTo(bTs);
+        return cmp != 0 ? cmp : a.id.compareTo(b.id);
+      });
       return messages;
     });
   }
@@ -63,7 +64,7 @@ class MessagingService {
     required String senderId,
     required String text,
   }) async {
-    final now = Timestamp.now();
+    final serverTimestamp = FieldValue.serverTimestamp();
 
     final batch = _db.batch();
 
@@ -72,7 +73,7 @@ class MessagingService {
     batch.set(msgRef, {
       'senderId': senderId,
       'text': text,
-      'timestamp': now,
+      'timestamp': serverTimestamp,
       'isRead': false,
     });
 
@@ -80,7 +81,7 @@ class MessagingService {
     final convRef = _conversations.doc(conversationId);
     batch.update(convRef, {
       'lastMessage': text,
-      'lastMessageTime': now,
+      'lastMessageTime': serverTimestamp,
       'lastSenderId': senderId,
     });
 
@@ -133,11 +134,12 @@ class MessagingService {
       convId,
     ).orderBy('timestamp', descending: false).snapshots().map((snap) {
       final messages = snap.docs.map((d) => MessageModel.fromDoc(d)).toList();
-      messages.sort(
-        (a, b) => a.timestamp.toDate().millisecondsSinceEpoch.compareTo(
-          b.timestamp.toDate().millisecondsSinceEpoch,
-        ),
-      );
+      messages.sort((a, b) {
+        final aTs = a.timestamp.toDate().millisecondsSinceEpoch;
+        final bTs = b.timestamp.toDate().millisecondsSinceEpoch;
+        final cmp = aTs.compareTo(bTs);
+        return cmp != 0 ? cmp : a.id.compareTo(b.id);
+      });
       return messages;
     });
   }
@@ -148,12 +150,12 @@ class MessagingService {
     required String text,
   }) async {
     final convId = 'ai_$userId';
-    final now = Timestamp.now();
 
     final convRef = _conversations.doc(convId);
     final msgRef = _messages(convId).doc();
 
     final batch = _db.batch();
+    final serverTimestamp = FieldValue.serverTimestamp();
 
     // Upsert conversation doc in case it doesn't exist yet
     batch.set(convRef, {
@@ -161,7 +163,7 @@ class MessagingService {
       'participantName': 'AI Assistant',
       'participantAvatar': '',
       'lastMessage': text,
-      'lastMessageTime': now,
+      'lastMessageTime': serverTimestamp,
       'isAI': true,
       'participants': [userId, 'ai'],
     }, SetOptions(merge: true));
@@ -169,7 +171,7 @@ class MessagingService {
     batch.set(msgRef, {
       'senderId': senderId,
       'text': text,
-      'timestamp': now,
+      'timestamp': serverTimestamp,
       'isRead': false,
     });
 
